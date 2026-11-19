@@ -107,16 +107,20 @@ export function metricaPrincipal(m: Metricas, chave: ChavePrincipal): MetricaPri
   return { valor: m[chave], rotulo: p.rotulo, custo, custoRotulo: p.custo, custoCurto: p.curto };
 }
 
-/** Custo com casas suficientes: custo por engajamento tem 3 casas ("R$ 0,020"). */
-export function fmtCusto(v: number, chave: ChavePrincipal): string {
-  if (chave === "engajamento" && v < 0.1) return `R$ ${nf({ minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(v)}`;
-  return fmtBRL(v, { decimals: 2 });
+/** Casas de um custo unitário: 3 quando < R$ 0,10 (nunca arredonda para zero), senão 2. */
+export function casasCusto(v: number): number {
+  return v > 0 && v < 0.1 ? 3 : 2;
+}
+
+/** Custo unitário (CPM, CPC, custo por engajamento): "R$ 1,31", "R$ 0,035". */
+export function fmtCusto(v: number): string {
+  return fmtBRL(v, { decimals: casasCusto(v) });
 }
 
 /** "10,9 mi impressões · CPM R$ 1,31" */
 export function fmtMetricaPrincipal(m: Metricas, chave: ChavePrincipal): string {
   const p = metricaPrincipal(m, chave);
-  return `${fmtCompact(p.valor)} ${p.rotulo} · ${p.custoCurto} ${fmtCusto(p.custo, chave)}`;
+  return `${fmtCompact(p.valor)} ${p.rotulo} · ${p.custoCurto} ${fmtCusto(p.custo)}`;
 }
 
 /* ------------------------------------------------- textos */

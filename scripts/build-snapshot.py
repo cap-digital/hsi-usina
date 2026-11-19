@@ -14,6 +14,11 @@ Regras:
     O alcance de uma estratégia com várias campanhas é a soma do alcance de cada campanha
     (marcado com alcanceSomado=true; a interface diz isso).
   - Engajamento = action post_engagement. Cliques no link = inline_link_clicks.
+  - Composição do engajamento (campo actions): reações = post_reaction, comentários = comment,
+    compartilhamentos = post, salvamentos = onsite_conversion.post_save, cliques no link = link_click,
+    visualizações de vídeo (3s) = video_view, visualizações de foto = photo_view;
+    outros = post_engagement − soma desses (só aparece se > 0; negativo vira aviso).
+    Curtidas na página = like (seguidores; não compõe o post_engagement, fica à parte).
   - Período 01/01 → 31/10/2026; só entram os meses com veiculação.
   - Público: idade/gênero desconhecidos ficam de fora; % sobre o informado.
 """
@@ -115,19 +120,36 @@ def ld(nome):
         return json.load(f)
 
 
+# Componentes do post_engagement (chave no snapshot → action_type da Meta).
+COMPOSICAO = {
+    "reacoes": "post_reaction",
+    "comentarios": "comment",
+    "compartilhamentos": "post",
+    "salvamentos": "onsite_conversion.post_save",
+    "linkClick": "link_click",
+    "videoViews": "video_view",
+    "fotoViews": "photo_view",
+}
+AVISOS_COMPOSICAO = []
+
+
 def metricas(r):
-    return {
+    m = {
         "investimento": num(r.get("spend")),
         "impressoes": num(r.get("impressions")),
         "alcance": num(r.get("reach")),
         "cliques": num(r.get("clicks")),
         "cliquesLink": num(r.get("inline_link_clicks")),
         "engajamento": acao(r, "post_engagement"),
+        "curtidasPagina": acao(r, "like"),
     }
+    for k, tipo in COMPOSICAO.items():
+        m[k] = acao(r, tipo)
+    return m
 
 
 def zero():
-    return {"investimento": 0.0, "impressoes": 0.0, "alcance": 0.0, "cliques": 0.0, "cliquesLink": 0.0, "engajamento": 0.0}
+    return {k: 0.0 for k in ["investimento", "impressoes", "alcance", "cliques", "cliquesLink", "engajamento", "curtidasPagina", *COMPOSICAO]}
 
 
 def soma(a, b):
@@ -146,6 +168,10 @@ def fecha(m, extra=None):
     out["cpc"] = round(inv / m["cliquesLink"], 2) if m["cliquesLink"] else 0
     out["custoEngajamento"] = round(inv / m["engajamento"], 4) if m["engajamento"] else 0
     out["frequencia"] = round(imp / alc, 2) if alc else 0
+    outros = round(m["engajamento"] - sum(m[k] for k in COMPOSICAO))
+    if outros < 0:
+        AVISOS_COMPOSICAO.append(f"Composição maior que o post_engagement ({outros}) em {extra or 'total'}"[:200])
+    out["outros"] = max(outros, 0)
     if extra:
         out.update(extra)
     return out
@@ -351,7 +377,7 @@ def main():
         "publico": publico,
         "publicoNota": publico_nota,
         "criativos": [{**{k: v for k, v in c.items() if k != "_md5"}, "chaveImagem": c["_md5"][:12]} for c in criativos],
-        "avisos": avisos,
+        "avisos": avisos + sorted(set(AVISOS_COMPOSICAO)),
     }
     os.makedirs(os.path.dirname(SAIDA), exist_ok=True)
     with open(SAIDA, "w", encoding="utf-8") as f:

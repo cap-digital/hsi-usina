@@ -37,7 +37,6 @@ export function Counter({
 
   const finalText = formatCounterValue(value, format, { decimals });
   const fixedFraction = countFractionDigits(finalText);
-  const initialText = formatCounterValue(0, format, { decimals, fixedFraction, unitOf: value });
 
   useGSAP(
     () => {
@@ -57,12 +56,14 @@ export function Counter({
         return;
       }
 
-      render();
+      // O valor final fica no lugar até a animação de fato começar: se o gatilho de rolagem não disparar
+      // (ex.: navegação com a cortina), o número certo continua na tela — nunca "R$ 0,000".
       gsap.to(state, {
         v: value,
         duration,
         delay,
         ease: "power3.out",
+        onStart: render,
         onUpdate: render,
         onComplete: settle,
         scrollTrigger: trigger === "scroll" ? { trigger: el, start: "top 92%", once: true } : undefined,
@@ -74,7 +75,7 @@ export function Counter({
   return (
     <span className={cn("tabular whitespace-nowrap", className)}>
       {prefix}
-      <span ref={ref}>{initialText}</span>
+      <span ref={ref}>{finalText}</span>
       {suffix}
     </span>
   );

@@ -14,6 +14,25 @@ export interface Metricas {
   cpc: number;
   custoEngajamento: number;
   frequencia: number;
+  /* Composição do engajamento com o post (actions): somam exatamente `engajamento`. */
+  /** post_reaction: curtidas e reações. */
+  reacoes: number;
+  /** comment */
+  comentarios: number;
+  /** post (compartilhamentos) */
+  compartilhamentos: number;
+  /** onsite_conversion.post_save */
+  salvamentos: number;
+  /** link_click (a ação; igual a cliquesLink no total) */
+  linkClick: number;
+  /** video_view (3 segundos) */
+  videoViews: number;
+  /** photo_view */
+  fotoViews: number;
+  /** post_engagement − soma dos itens acima (0 quando a composição fecha). */
+  outros: number;
+  /** like: curtidas na página (seguidores). NÃO compõe o engajamento com o post. */
+  curtidasPagina: number;
 }
 
 export interface Periodo {

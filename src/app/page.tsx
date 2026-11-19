@@ -4,11 +4,12 @@ import { Reveal } from "@/components/core/reveal";
 import { Section } from "@/components/core/section";
 import { PageHero } from "@/components/hero/page-hero";
 import { BotaoExportarPdf } from "@/components/paginas/exportar-pdf";
+import { ComposicaoEngajamento } from "@/components/paginas/composicao-engajamento";
 import { PortasCards } from "@/components/paginas/portas";
 import { GradeEstrategias } from "@/components/viz/grade-estrategias";
 import { MonthlyChart } from "@/components/viz/monthly-chart";
 import { SplitBar } from "@/components/viz/small";
-import { fmtBRL, fmtCompact, fmtDec, fmtExtenso, fmtLista, fmtMil, fmtNum, fmtPct } from "@/data/format";
+import { fmtBRL, fmtCompact, fmtCusto, fmtDec, fmtLista, fmtMil, fmtNum, fmtPct } from "@/data/format";
 import snapshot from "@/data/snapshot.json";
 import type { Snapshot } from "@/data/types";
 
@@ -17,7 +18,6 @@ const s = snapshot as Snapshot;
 export default function Home() {
   const t = s.totais;
   const meses = s.meses;
-  const nomes = meses.map((m) => m.nome);
   const primeiroTri = meses.filter((m) => m.mes < "2026-04");
   const invTri = primeiroTri.reduce((a, m) => a + m.investimento, 0);
   const out = meses.find((m) => m.mes === "2026-10");
@@ -55,19 +55,34 @@ export default function Home() {
 
       <Section
         index="01"
+        eyebrow="Engajamento"
+        title={
+          <>
+            O que compõe <em>{fmtCompact(t.engajamento, 2)} de engajamentos.</em>
+          </>
+        }
+        description={`${fmtNum(t.reacoes)} curtidas e reações, ${fmtNum(t.comentarios)} comentários, ${fmtNum(t.compartilhamentos)} compartilhamentos e ${fmtNum(t.salvamentos)} salvamentos nos posts do hospital. A maior parte do engajamento vem das visualizações de vídeo, que a Meta também conta como interação com o post.`}
+      >
+        <ChartFrame eyebrow="Engajamento com o post · composição" title="Interações por tipo" minHeight={300} span={3}>
+          <ComposicaoEngajamento dados={[{ rotulo: "Todas", m: t }]} />
+        </ChartFrame>
+      </Section>
+
+      <Section
+        index="02"
         eyebrow="Big numbers"
         title={
           <>
             {fmtCompact(t.impressoes, 1)} de impressões, <em>{fmtCompact(t.alcance, 1)} de pessoas.</em>
           </>
         }
-        description={`Cada pessoa alcançada viu os anúncios do hospital, em média, ${fmtDec(t.frequencia, 1)} vezes. Mil impressões custaram ${fmtBRL(t.cpm)} e cada engajamento, ${fmtBRL(t.custoEngajamento, { decimals: 3 })}.`}
+        description={`Cada pessoa alcançada viu os anúncios do hospital, em média, ${fmtDec(t.frequencia, 1)} vezes. Mil impressões custaram ${fmtBRL(t.cpm)} e cada engajamento, ${fmtCusto(t.custoEngajamento)}.`}
       >
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Fato valor={fmtBRL(t.cpm)} rotulo="CPM: o custo de mil impressões" />
           <Fato valor={fmtDec(t.frequencia, 1)} rotulo="frequência média: vezes que cada pessoa viu os anúncios" />
           <Fato valor={fmtNum(t.campanhas)} rotulo={`campanhas com veiculação e ${fmtNum(t.anuncios)} anúncios`} />
-          <Fato valor={fmtExtenso(t.meses)} rotulo={`meses com veiculação: ${fmtLista(nomes)}`} />
+          <Fato valor={fmtNum(t.compartilhamentos)} rotulo={`compartilhamentos: posts do hospital passados adiante, além de ${fmtNum(t.comentarios)} comentários`} />
         </div>
         <Reveal className="hub-card mt-4 p-7 md:p-9">
           <span className="eyebrow text-[var(--verde-escuro)]">Investimento por tipo de campanha</span>
@@ -85,7 +100,7 @@ export default function Home() {
       </Section>
 
       <Section
-        index="02"
+        index="03"
         eyebrow="Mês a mês"
         title={
           <>
@@ -102,7 +117,7 @@ export default function Home() {
       </Section>
 
       <Section
-        index="03"
+        index="04"
         eyebrow="Estratégia × mês"
         title={
           <>
@@ -124,7 +139,7 @@ export default function Home() {
         </ChartFrame>
       </Section>
 
-      <Section index="04" eyebrow="Explore" title={<>Duas leituras do <em>mesmo ano.</em></>}>
+      <Section index="05" eyebrow="Explore" title={<>Duas leituras do <em>mesmo ano.</em></>}>
         <PortasCards
           portas={[
             {

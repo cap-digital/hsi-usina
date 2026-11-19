@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import type { Criativo } from "@/data/types";
 import { PRINCIPAL_DA_ESTRATEGIA, fmtBRL, fmtCompact, fmtCusto, metricaPrincipal } from "@/data/format";
+import { InteracoesMini } from "./composicao-engajamento";
 import { BotaoVerTodos } from "./ver-todos";
 
 const INICIAL = 8;
@@ -69,10 +70,11 @@ export function CriativosGrid({ criativos, mostrarEstrategia = true }: { criativ
                     <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-3">impressões</span>
                   </div>
                   <div className="text-right">
-                    <span className="block whitespace-nowrap text-[14px] font-bold text-[var(--verde-escuro)] tabular">{fmtCusto(p.custo, chave)}</span>
+                    <span className="block whitespace-nowrap text-[14px] font-bold text-[var(--verde-escuro)] tabular">{fmtCusto(p.custo)}</span>
                     <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.custoCurto}</span>
                   </div>
                 </div>
+                <InteracoesMini m={c} />
                 <div className="mt-auto flex items-center justify-between gap-2 border-t border-line pt-2.5 text-[11px] text-text-3 tabular">
                   <span className="truncate">{chave === "impressoes" ? `${fmtCompact(c.alcance)} de alcance` : `${fmtCompact(p.valor)} ${p.rotulo}`}</span>
                   <span className="shrink-0">{fmtBRL(c.investimento, { compact: true })}</span>

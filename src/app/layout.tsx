@@ -4,7 +4,6 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { SmoothScroll } from "@/components/core/smooth-scroll";
 import { Preloader } from "@/components/core/preloader";
-import { Grain } from "@/components/core/grain";
 import { PageTransition } from "@/components/core/page-transition";
 import { Nav } from "@/components/nav/nav";
 import { Footer } from "@/components/nav/footer";
@@ -60,7 +59,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <PainelProvider value={painel}>
           <SmoothScroll>
             <Preloader />
-            <Grain />
             <PageTransition />
             <Nav />
             {children}

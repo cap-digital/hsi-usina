@@ -4,10 +4,11 @@ import { KpiTile } from "@/components/core/kpi-tile";
 import { Reveal } from "@/components/core/reveal";
 import { Section } from "@/components/core/section";
 import { PageHero } from "@/components/hero/page-hero";
+import { ComposicaoEngajamento } from "@/components/paginas/composicao-engajamento";
 import { CriativosGrid } from "@/components/paginas/criativos";
 import { EntregaPublico } from "@/components/paginas/entrega-publico";
 import { HBars } from "@/components/viz/hbars";
-import { NOTA_2025, fmtBRL, fmtCompact, fmtCusto, fmtExtenso, fmtMeses, fmtMil, fmtNum, fmtPct, metricaPrincipal } from "@/data/format";
+import { NOTA_2025, casasCusto, fmtBRL, fmtCompact, fmtCusto, fmtExtenso, fmtMeses, fmtMil, fmtNum, fmtPct, metricaPrincipal } from "@/data/format";
 import snapshot from "@/data/snapshot.json";
 import type { Criativo, Estrategia, Snapshot } from "@/data/types";
 
@@ -30,6 +31,7 @@ export default function Midia() {
   const porInvestimento = [...s.estrategias].sort((a, b) => b.investimento - a.investimento);
   const porImpressoes = [...s.estrategias].sort((a, b) => b.impressoes - a.impressoes);
   const maior = porInvestimento[0];
+  const porEngajamento = [...s.estrategias].sort((a, b) => b.reacoes - a.reacoes)[0];
   const criativos = criativosUnicos(s.criativos);
   const pub = s.publico;
   const totPub = pub.reduce((a, p) => a + p.impressoes, 0) || 1;
@@ -49,7 +51,7 @@ export default function Midia() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} hint="Valor do Gerenciador de Anúncios" />
             <KpiTile label="CPM" value={t.cpm} format="currency" decimals={2} hint="Custo por mil impressões" />
-            <KpiTile label="Custo por engajamento" value={t.custoEngajamento} format="currency" decimals={3} hint={`${fmtCompact(t.engajamento, 2)} engajamentos`} />
+            <KpiTile label="Custo por engajamento" value={t.custoEngajamento} format="currency" decimals={casasCusto(t.custoEngajamento)} hint={`${fmtCompact(t.engajamento, 2)} engajamentos`} />
             <KpiTile label="CPC" value={t.cpc} format="currency" decimals={2} hint={`Por clique no link · ${fmtCompact(t.cliquesLink, 1)} cliques`} />
             <KpiTile label="CTR" value={t.ctr * 100} format="percent" decimals={2} hint="Cliques ÷ impressões" className="col-span-2 md:col-span-1" />
           </div>
@@ -114,6 +116,27 @@ export default function Midia() {
 
       <Section
         index="02"
+        eyebrow="Engajamento"
+        title={
+          <>
+            Curtidas, comentários, <em>compartilhamentos.</em>
+          </>
+        }
+        description={
+          <>
+            A composição dos {fmtCompact(t.engajamento, 2)} engajamentos com o post
+            <span className="no-print">; escolha a estratégia</span>. {porEngajamento.estrategia} concentrou {fmtPct(porEngajamento.reacoes / (t.reacoes || 1), 0)} das curtidas e
+            reações.
+          </>
+        }
+      >
+        <ChartFrame eyebrow="Engajamento com o post · composição" title="Interações por tipo e estratégia" minHeight={340}>
+          <ComposicaoEngajamento dados={[{ rotulo: "Todas", m: t }, ...s.estrategias.map((e) => ({ rotulo: e.estrategia, m: e }))]} />
+        </ChartFrame>
+      </Section>
+
+      <Section
+        index="03"
         eyebrow="Público"
         title={
           <>
@@ -133,7 +156,7 @@ export default function Midia() {
       </Section>
 
       <Section
-        index="03"
+        index="04"
         eyebrow="Criativos"
         nota={`Seleção por entrega: as peças com mais impressões entre os ${fmtNum(t.anuncios)} anúncios do período.`}
         title={
@@ -171,7 +194,7 @@ function CartaoEstrategia({ e, i }: { e: Estrategia; i: number }) {
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.rotulo}</span>
         </div>
         <div className="text-right">
-          <span className="block text-[1.2rem] font-bold text-[var(--verde-escuro)] tabular">{fmtCusto(p.custo, e.principal)}</span>
+          <span className="block text-[1.2rem] font-bold text-[var(--verde-escuro)] tabular">{fmtCusto(p.custo)}</span>
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.custoRotulo}</span>
         </div>
       </div>

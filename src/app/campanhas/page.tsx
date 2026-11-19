@@ -3,12 +3,14 @@ import { KpiTile } from "@/components/core/kpi-tile";
 import { Reveal } from "@/components/core/reveal";
 import { Section } from "@/components/core/section";
 import { PageHero } from "@/components/hero/page-hero";
+import { ComposicaoEngajamento } from "@/components/paginas/composicao-engajamento";
 import { CriativosGrid } from "@/components/paginas/criativos";
 import { PortasCards } from "@/components/paginas/portas";
 import { SplitBar } from "@/components/viz/small";
-import { NOTA_2025, fmtBRL, fmtCompact, fmtCusto, fmtDec, fmtLista, fmtMeses, fmtMil, fmtNum, fmtPct, metricaPrincipal } from "@/data/format";
+import { NOTA_2025, casasCusto, fmtBRL, fmtCompact, fmtCusto, fmtDec, fmtLista, fmtMeses, fmtMil, fmtNum, fmtPct, metricaPrincipal } from "@/data/format";
 import snapshot from "@/data/snapshot.json";
 import type { Campanha, Estrategia, Snapshot } from "@/data/types";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Campanhas · Hospital Santa Izabel · Relatório de Desempenho Meta 2026" };
 
@@ -99,7 +101,7 @@ export default function Campanhas() {
               return {
                 titulo: e.estrategia,
                 numero: fmtCompact(p.valor, 1),
-                legenda: `${p.rotulo} · ${p.custoRotulo} ${fmtCusto(p.custo, e.principal)}`,
+                legenda: `${p.rotulo} · ${p.custoRotulo} ${fmtCusto(p.custo)}`,
                 nota: `${fmtMil(e.investimento)} · ${e.campanhas} ${e.campanhas === 1 ? "campanha" : "campanhas"} · ${fmtMeses(e.meses)}`,
                 texto: TEXTO[e.estrategia] ?? "",
                 tom: "amber" as const,
@@ -139,18 +141,27 @@ function SecaoEstrategia({ e, index, especial = false }: { e: Estrategia; index:
             {`${e.estrategia}:`} <em>{fmtCompact(p.valor, 1)} {p.rotulo}.</em>
           </>
         }
-        description={`${TEXTO[e.estrategia] ?? ""} ${fmtMil(e.investimento)} ${unica ? "" : `em ${campanhas.length} campanhas `}de ${fmtMeses(e.meses)}, com ${p.custoRotulo.toLowerCase() === "cpm" || p.custoRotulo === "CPC" ? p.custoRotulo : p.custoRotulo.toLowerCase()} de ${fmtCusto(p.custo, e.principal)}.`}
+        description={`${TEXTO[e.estrategia] ?? ""} ${fmtMil(e.investimento)} ${unica ? "" : `em ${campanhas.length} campanhas `}de ${fmtMeses(e.meses)}, com ${p.custoRotulo.toLowerCase() === "cpm" || p.custoRotulo === "CPC" ? p.custoRotulo : p.custoRotulo.toLowerCase()} de ${fmtCusto(p.custo)}.`}
       >
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <KpiTile label="Investimento" value={e.investimento} format="compactCurrency" decimals={1} hint={fmtBRL(e.investimento)} />
           <KpiTile label={p.rotulo[0].toUpperCase() + p.rotulo.slice(1)} value={p.valor} format="compact" decimals={p.valor >= 1e6 ? 2 : 1} />
-          <KpiTile label={p.custoRotulo} value={p.custo} format="currency" decimals={e.principal === "engajamento" && p.custo < 0.1 ? 3 : 2} />
+          <KpiTile label={p.custoRotulo} value={p.custo} format="currency" decimals={casasCusto(p.custo)} />
           {e.principal === "impressoes" ? (
             <KpiTile label={alcanceRotulo} value={e.alcance} format="compact" decimals={1} hint={e.alcanceSomado ? "Soma do alcance de cada campanha" : `Frequência ${fmtDec(e.frequencia, 1)}`} />
           ) : (
             <KpiTile label="Impressões" value={e.impressoes} format="compact" decimals={1} hint={`CPM de ${fmtBRL(e.cpm)}`} />
           )}
         </div>
+
+        {e.principal === "engajamento" && (
+          <Reveal className="hub-card mt-4 p-5 md:p-6" y={20}>
+            <span className="eyebrow text-[var(--verde-escuro)]">Interações com os posts</span>
+            <div className="mt-4">
+              <ComposicaoEngajamento dados={[{ rotulo: e.estrategia, m: e }]} compacto />
+            </div>
+          </Reveal>
+        )}
 
         {campanhas.length > 1 && (
           <Reveal className="hub-card mt-4 overflow-x-auto p-2 md:p-3" y={20}>
@@ -179,8 +190,9 @@ function SecaoEstrategia({ e, index, especial = false }: { e: Estrategia; index:
 
 function TabelaCampanhas({ campanhas, e }: { campanhas: Campanha[]; e: Estrategia }) {
   const p = metricaPrincipal(e, e.principal);
+  const eng = e.principal === "engajamento";
   return (
-    <table className="w-full min-w-[640px] border-collapse text-left text-[13.5px]">
+    <table className={cn("w-full border-collapse text-left text-[13.5px]", eng ? "min-w-[900px]" : "min-w-[640px]")}>
       <thead>
         <tr className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-text-3">
           <th className="px-4 py-3 font-semibold">Campanha</th>
@@ -188,6 +200,13 @@ function TabelaCampanhas({ campanhas, e }: { campanhas: Campanha[]; e: Estrategi
           <th className="px-4 py-3 text-right font-semibold">Investimento</th>
           <th className="px-4 py-3 text-right font-semibold">{p.rotulo}</th>
           <th className="px-4 py-3 text-right font-semibold">{p.custoRotulo}</th>
+          {eng && (
+            <>
+              <th className="px-4 py-3 text-right font-semibold">Reações</th>
+              <th className="px-4 py-3 text-right font-semibold">Comentários</th>
+              <th className="px-4 py-3 text-right font-semibold">Compart.</th>
+            </>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -202,7 +221,14 @@ function TabelaCampanhas({ campanhas, e }: { campanhas: Campanha[]; e: Estrategi
               <td className="px-4 py-3 text-text-2">{fmtMeses(c.meses)}</td>
               <td className="px-4 py-3 text-right font-semibold tabular">{fmtBRL(c.investimento)}</td>
               <td className="px-4 py-3 text-right tabular">{fmtNum(m.valor)}</td>
-              <td className="px-4 py-3 text-right tabular">{fmtCusto(m.custo, e.principal)}</td>
+              <td className="px-4 py-3 text-right tabular">{fmtCusto(m.custo)}</td>
+              {eng && (
+                <>
+                  <td className="px-4 py-3 text-right tabular">{fmtNum(c.reacoes)}</td>
+                  <td className="px-4 py-3 text-right tabular">{fmtNum(c.comentarios)}</td>
+                  <td className="px-4 py-3 text-right tabular">{fmtNum(c.compartilhamentos)}</td>
+                </>
+              )}
             </tr>
           );
         })}
@@ -210,7 +236,7 @@ function TabelaCampanhas({ campanhas, e }: { campanhas: Campanha[]; e: Estrategi
       {campanhas.some((c) => c.comecouAntes) && (
         <tfoot>
           <tr>
-            <td colSpan={5} className="px-4 pb-2 pt-3 text-[11px] text-text-3">
+            <td colSpan={eng ? 8 : 5} className="px-4 pb-2 pt-3 text-[11px] text-text-3">
               * Começou em 2025; aqui só o veiculado em 2026.
             </td>
           </tr>
