@@ -61,7 +61,7 @@ export default function Home() {
             O que compõe <em>{fmtCompact(t.engajamento, 2)} de engajamentos.</em>
           </>
         }
-        description={`${fmtNum(t.reacoes)} curtidas e reações, ${fmtNum(t.comentarios)} comentários, ${fmtNum(t.compartilhamentos)} compartilhamentos e ${fmtNum(t.salvamentos)} salvamentos nos posts do hospital. A maior parte do engajamento vem das visualizações de vídeo, que a Meta também conta como interação com o post.`}
+        description={`${fmtNum(t.reacoes)} curtidas e reações, ${fmtNum(t.comentarios)} comentários, ${fmtNum(t.compartilhamentos)} compartilhamentos e ${fmtNum(t.salvamentos)} salvamentos nos posts do hospital.`}
       >
         <ChartFrame eyebrow="Engajamento com o post · composição" title="Interações por tipo" minHeight={300} span={3}>
           <ComposicaoEngajamento dados={[{ rotulo: "Todas", m: t }]} />

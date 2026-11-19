@@ -2,7 +2,6 @@
 export { SmoothScroll } from "./smooth-scroll";
 export { Preloader, useHubReady } from "./preloader";
 export { markHubReady, waitForHubReady, getHubReady } from "./hub-ready-store";
-export { Grain } from "./grain";
 export { PageTransition, playCurtainIn, playCurtainOut } from "./page-transition";
 export { TransitionLink } from "./transition-link";
 export { Section, type SectionProps, type SectionTone } from "./section";
