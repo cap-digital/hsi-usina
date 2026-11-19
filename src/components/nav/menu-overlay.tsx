@@ -11,7 +11,7 @@ import { TransitionLink } from "@/components/core/transition-link";
 import { fmtAtualizado, fmtDia } from "@/data/format";
 import { usePainel } from "@/data/provider";
 
-type PreviewImage = "inicio" | "midia" | "frentes";
+type PreviewImage = "inicio" | "midia" | "campanhas";
 
 interface MenuLink {
   index: string;
@@ -22,16 +22,16 @@ interface MenuLink {
 }
 
 const LINKS: MenuLink[] = [
-  { index: "01", href: "/", label: "Início", meta: "Panorama · Meta × Google", image: "inicio" },
-  { index: "02", href: "/midia", label: "Mídia", meta: "Estratégias, busca, público, criativos", image: "midia" },
-  { index: "03", href: "/frentes", label: "Frentes", meta: "Investimento, estratégias e criativos por frente", image: "frentes" },
+  { index: "01", href: "/", label: "Início", meta: "Big numbers · mês a mês", image: "inicio" },
+  { index: "02", href: "/midia", label: "Mídia", meta: "Estratégias, público, criativos", image: "midia" },
+  { index: "03", href: "/campanhas", label: "Campanhas", meta: "Always On e campanhas especiais", image: "campanhas" },
 ];
 
 /** Um criativo do hospital por página (cópias locais em public/criativos/). */
 const PREVIEW_SRC: Record<PreviewImage, string> = {
-  inicio: "/criativos/meta-03.jpg",
-  midia: "/criativos/meta-02.jpg",
-  frentes: "/criativos/meta-06.jpg",
+  inicio: "/criativos/120239505454020251.jpg",
+  midia: "/criativos/120237619353070251.jpg",
+  campanhas: "/criativos/120237619374270251.jpg",
 };
 
 export interface MenuOverlayProps {
@@ -39,7 +39,7 @@ export interface MenuOverlayProps {
   onClose: () => void;
 }
 
-/** Fullscreen ink menu: giant links with index numbers, cursor-following image preview, ESC to close. */
+/** Fullscreen menta menu: giant links with index numbers, cursor-following image preview, ESC to close. */
 export function MenuOverlay({ open, onClose }: MenuOverlayProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -156,7 +156,7 @@ export function MenuOverlay({ open, onClose }: MenuOverlayProps) {
         <div className="dot-grid absolute inset-0 opacity-60 [mask-image:radial-gradient(70%_60%_at_30%_40%,#000,transparent)]" />
         <div
           className="pointer-events-none absolute -bottom-40 -right-40 size-[60vmin] rounded-full opacity-60 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(200,220,76,.16), transparent 65%)" }}
+          style={{ background: "radial-gradient(circle, rgba(46,176,56,.18), transparent 65%)" }}
         />
         <div className="noise" />
 
@@ -178,10 +178,10 @@ export function MenuOverlay({ open, onClose }: MenuOverlayProps) {
                     >
                       <span className="line-mask flex-1">
                         <span className="menu-link-inner flex items-baseline gap-5 md:gap-8">
-                          <span className="font-mono text-[12px] text-amber tabular md:text-[13px]">{link.index}</span>
+                          <span className="text-[12px] font-semibold text-amber tabular md:text-[13px]">{link.index}</span>
                           <span
                             className={cn(
-                              "menu-link-label display text-[clamp(2.75rem,8.5vw,7.25rem)] leading-[0.95] tracking-[-0.035em] text-text group-hover/link:text-amber",
+                              "menu-link-label display titulo-secao text-[clamp(2.75rem,8vw,6.75rem)] leading-[0.95] text-[var(--verde-escuro)] group-hover/link:text-amber",
                               active && "text-amber",
                             )}
                           >
@@ -202,7 +202,7 @@ export function MenuOverlay({ open, onClose }: MenuOverlayProps) {
               <div
                 ref={previewRef}
                 aria-hidden="true"
-                className="absolute inset-0 overflow-hidden rounded-[20px] border border-line opacity-0 shadow-[0_40px_120px_-40px_rgba(0,0,0,.8)]"
+                className="absolute inset-0 overflow-hidden rounded-[20px] border border-line opacity-0 shadow-[0_40px_120px_-40px_rgba(0,99,26,.45)]"
               >
                 {(Object.keys(PREVIEW_SRC) as PreviewImage[]).map((key) => (
                   <Image
@@ -215,8 +215,8 @@ export function MenuOverlay({ open, onClose }: MenuOverlayProps) {
                     className="object-cover opacity-0"
                   />
                 ))}
-                <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/20 via-30% to-transparent" />
-                <span className="menu-meta absolute bottom-4 left-4 font-mono text-[10.5px] uppercase tracking-[0.16em] text-text-2">
+                <div className="absolute inset-0 bg-gradient-to-t from-[var(--verde-escuro)]/80 via-transparent via-40% to-transparent" />
+                <span className="menu-meta absolute bottom-4 left-4 text-[10.5px] font-semibold uppercase tracking-[0.2em] text-white">
                   {painel.cliente} · criativos 2026
                 </span>
               </div>
@@ -225,14 +225,14 @@ export function MenuOverlay({ open, onClose }: MenuOverlayProps) {
 
           <div className="menu-meta mt-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-t border-line pt-6">
             <div className="flex items-center gap-4">
-              <LogoHSI className="text-[15px]" />
+              <LogoHSI altura={56} />
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-text-3">
               <span>
                 Período {fmtDia(painel.periodo.inicio)} → {fmtDia(painel.periodo.fim)}
               </span>
-              <span className="hidden sm:inline">Atualizado {fmtAtualizado(painel.atualizadoEm)}</span>
-              <span>Meta Ads · Google Ads</span>
+              <span className="hidden sm:inline">Dados de {fmtAtualizado(painel.atualizadoEm)}</span>
+              <span>Meta · Facebook + Instagram</span>
             </div>
           </div>
         </div>

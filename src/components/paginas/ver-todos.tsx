@@ -11,7 +11,7 @@ export function BotaoVerTodos({ aberto, total, inicial, onToggle }: { aberto: bo
     <button
       type="button"
       onClick={onToggle}
-      className="no-print mt-6 inline-flex items-center gap-2 rounded-full border border-line-strong px-4 py-2 text-[13px] font-medium text-text-2 transition-colors hover:border-text/40 hover:text-text"
+      className="no-print mt-6 inline-flex items-center gap-2 rounded-full border-[1.5px] border-[var(--verde)] bg-white px-5 py-2 text-[13px] font-semibold text-[var(--verde-escuro)] transition-colors hover:bg-[var(--verde)] hover:text-white"
     >
       {aberto ? "Mostrar menos" : `Ver todos (${total})`}
       <ChevronDown className={cn("size-4 transition-transform duration-300", aberto && "rotate-180")} />

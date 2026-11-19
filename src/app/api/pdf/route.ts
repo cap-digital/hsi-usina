@@ -1,5 +1,5 @@
 /**
- * GET /api/pdf — gera o relatório (Início + Mídia + Frentes) em PDF num
+ * GET /api/pdf — gera o relatório (Início + Mídia + Campanhas) em PDF num
  * Chrome headless no servidor: a rolagem que monta os gráficos acontece lá,
  * invisível para quem clicou, e o arquivo já sai pronto para download.
  * Na Vercel usa @sparticuz/chromium; em dev, o Chromium do playwright (ou o Chrome instalado).
@@ -98,11 +98,10 @@ async function gerar(req: Request): Promise<Response> {
     await page.waitForTimeout(300);
 
     const pdf = await page.pdf({ width: `${LARGURA}px`, height: `${ALTURA}px`, printBackground: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
-    const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="hospital-santa-izabel-balanco-de-midia-${hoje}.pdf"`,
+        "Content-Disposition": `attachment; filename="HSI-Relatorio-Meta-2026.pdf"`,
         "Cache-Control": "no-store",
       },
     });

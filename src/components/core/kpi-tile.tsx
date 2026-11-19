@@ -58,17 +58,17 @@ const PADDING: Record<KpiSize, string> = {
 };
 
 const TONE_COLOR: Record<KpiTone, string> = {
-  default: "var(--text)",
+  default: "var(--verde)",
   amber: "var(--amber)",
   copper: "var(--copper)",
   dusk: "var(--dusk-2)",
 };
 
 const TONE_LABEL: Record<KpiTone, string> = {
-  default: "text-text-3",
-  amber: "text-amber",
-  copper: "text-copper",
-  dusk: "text-dusk-2",
+  default: "text-[var(--verde-escuro)]",
+  amber: "text-[var(--verde-escuro)]",
+  copper: "text-[var(--verde-escuro)]",
+  dusk: "text-[var(--verde-escuro)]",
 };
 
 export function KpiTile({
@@ -110,7 +110,7 @@ export function KpiTile({
       )}
     >
       <div className="flex items-start justify-between gap-4">
-        <span className={cn("eyebrow", TONE_LABEL[tone])}>{label}</span>
+        <span className={cn("eyebrow !tracking-[0.2em]", TONE_LABEL[tone])}>{label}</span>
         {icon && <span className="shrink-0 text-text-3 [&_svg]:size-4">{icon}</span>}
       </div>
 
@@ -123,7 +123,7 @@ export function KpiTile({
             prefix={prefix}
             suffix={suffix}
             trigger={hero ? "ready" : "scroll"}
-            className={cn("display whitespace-nowrap leading-[0.9] tracking-[-0.035em]", VALUE_SIZE[size])}
+            className={cn("display whitespace-nowrap font-black leading-[0.9] tracking-[-0.03em]", VALUE_SIZE[size])}
           />
         </span>
         {sparkline && sparkline.length > 1 && (

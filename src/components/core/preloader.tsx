@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { useLenisLock } from "@/hooks/use-lenis-lock";
+import { LogoHSI } from "./logo";
 import {
   getHubReady,
   getHubReadyServer,
@@ -119,27 +120,25 @@ export function Preloader() {
       <div className="noise" />
 
       <div className="container-hub flex items-center justify-between pt-8 md:pt-10">
-        <span className="pre-meta font-mono text-[11px] uppercase tracking-[0.18em] text-text-3 opacity-0">
-          Balanço de mídia · 2026
+        <span className="pre-meta eyebrow text-[var(--verde-escuro)] opacity-0">
+          Relatório de desempenho · 2026
         </span>
-        <span className="pre-meta font-mono text-[11px] uppercase tracking-[0.18em] text-text-3 opacity-0">
-          Meta Ads × Google Ads
+        <span className="pre-meta eyebrow text-[var(--verde-escuro)] opacity-0">
+          Meta · Facebook + Instagram
         </span>
       </div>
 
       <div className="container-hub flex flex-1 items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center">
-          <span className="pre-logo display text-[clamp(2.6rem,7vw,6rem)] font-semibold leading-none tracking-[-0.04em] text-text opacity-0">
-            Santa Izabel<span className="text-amber">.</span>
+          <span className="pre-logo opacity-0">
+            <LogoHSI altura={190} priority />
           </span>
-          <span className="pre-logo font-serif text-[clamp(1.1rem,2vw,1.6rem)] italic text-text-2 opacity-0">
-            2026 até aqui, em números
-          </span>
+          <span className="pre-logo eyebrow mt-4 text-[var(--verde-escuro)] opacity-0">Relatório de desempenho · Meta 2026</span>
         </div>
       </div>
 
       <div className="container-hub relative flex items-end justify-between pb-8 md:pb-10">
-        <span className="pre-counter font-mono text-[clamp(3.5rem,10vw,8.5rem)] leading-none tracking-[-0.04em] text-text tabular">
+        <span className="pre-counter display text-[clamp(3.5rem,10vw,8.5rem)] font-black leading-none tracking-[-0.04em] text-[var(--verde)] tabular">
           <span ref={counterRef}>000</span>
           <span className="ml-1 text-[0.35em] text-amber align-top">%</span>
         </span>

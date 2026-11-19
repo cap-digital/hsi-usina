@@ -1,49 +1,33 @@
 "use client";
 
-import { useRef, type CSSProperties, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { useHubReady } from "@/components/core/preloader";
 import { SplitHeading } from "@/components/core/split-heading";
+import { LinhasCasa } from "@/components/core/casa";
+import { LogoHSI } from "@/components/core/logo";
 import { cn } from "@/lib/utils";
 
 export interface PageHeroProps {
   eyebrow: string;
   title: ReactNode;
   description?: ReactNode;
-  tone: "dusk" | "copper" | "amber";
-  image?: "none";
+  /** "verde": bloco verde cheio (capa, Início). "claro": fundo menta (páginas internas). */
+  variante?: "verde" | "claro";
+  /** Pílula verde-escura ao lado do título (ex.: "2026"). */
+  selo?: string;
   kpis?: ReactNode;
   children?: ReactNode;
 }
 
-const TONES: Record<PageHeroProps["tone"], { text: string; rgb: string; glow: string }> = {
-  dusk: { text: "var(--dusk-2, #5FC2AE)", rgb: "47,143,126", glow: "95,194,174" },
-  copper: { text: "var(--copper, #6BA84F)", rgb: "79,138,58", glow: "107,168,79" },
-  amber: { text: "var(--amber, #C8DC4C)", rgb: "169,190,46", glow: "200,220,76" },
-};
-
-const PAGE_HERO_CSS = `
-@keyframes hub-mesh-a{0%{transform:translate3d(-10%,-6%,0) scale(1)}100%{transform:translate3d(12%,10%,0) scale(1.22)}}
-@keyframes hub-mesh-b{0%{transform:translate3d(8%,12%,0) scale(1.12)}100%{transform:translate3d(-12%,-6%,0) scale(.9)}}
-@keyframes hub-mesh-c{0%{transform:translate3d(0,8%,0) scale(.95)}100%{transform:translate3d(-6%,-10%,0) scale(1.15)}}
-.hub-mesh-a{animation:hub-mesh-a 19s ease-in-out infinite alternate}
-.hub-mesh-b{animation:hub-mesh-b 23s ease-in-out infinite alternate}
-.hub-mesh-c{animation:hub-mesh-c 27s ease-in-out infinite alternate}
-@media (prefers-reduced-motion:reduce){.hub-mesh-a,.hub-mesh-b,.hub-mesh-c{animation:none}}
-`;
-
-const MONO = "font-[family-name:var(--font-mono)]";
-const DISPLAY = "font-[family-name:var(--font-display)]";
-
 /**
- * Inner-page hero: giant SplitHeading title over an animated gradient mesh
- * (limão, verde da marca, verde-água), with an eyebrow, description, KPI row
- * slot and optional children (export button).
+ * Hero das páginas: título Black em caixa alta (SplitHeading), motivo das linhas em "casa"
+ * em parallax, eyebrow espaçado, descrição, linha de KPIs e slot extra (botão do PDF).
  */
-export function PageHero({ eyebrow, title, description, tone, kpis, children }: PageHeroProps) {
+export function PageHero({ eyebrow, title, description, variante = "claro", selo, kpis, children }: PageHeroProps) {
   const rootRef = useRef<HTMLElement>(null);
   const ready = useHubReady();
-  const palette = TONES[tone];
+  const verde = variante === "verde";
 
   useGSAP(
     () => {
@@ -73,7 +57,7 @@ export function PageHero({ eyebrow, title, description, tone, kpis, children }: 
       const root = rootRef.current;
       if (!root) return;
       const items = gsap.utils.toArray<HTMLElement>("[data-page-hero-item]", root);
-      const glow = root.querySelector<HTMLElement>("[data-page-hero-glow]");
+      const linhas = root.querySelectorAll<SVGPathElement>("[data-page-hero-glow] path");
       const mm = gsap.matchMedia();
 
       mm.add("(prefers-reduced-motion: reduce)", () => {
@@ -81,117 +65,82 @@ export function PageHero({ eyebrow, title, description, tone, kpis, children }: 
       });
 
       mm.add("(prefers-reduced-motion: no-preference)", () => {
-        gsap.fromTo(
-          items,
-          { y: 26, autoAlpha: 0 },
-          { y: 0, autoAlpha: 1, duration: 1.3, ease: "expo.out", stagger: 0.1, delay: 0.42 },
-        );
-        if (glow) {
-          gsap.fromTo(glow, { scale: 0.8, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 2.2, ease: "expo.out" });
+        gsap.fromTo(items, { y: 26, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 1.3, ease: "expo.out", stagger: 0.1, delay: 0.42 });
+        if (linhas.length) {
+          gsap.fromTo(linhas, { drawSVG: "50% 50%" }, { drawSVG: "0% 100%", duration: 2.2, ease: "expo.out", stagger: 0.07 });
         }
       });
     },
     { scope: rootRef, dependencies: [ready] },
   );
 
-  const toneVars = {
-    "--tone": palette.text,
-    "--tone-rgb": palette.rgb,
-    "--tone-glow": palette.glow,
-  } as CSSProperties;
-
   return (
     <section
       ref={rootRef}
-      data-tone={tone}
       data-hero
-      className="relative isolate flex min-h-[85svh] flex-col justify-end overflow-hidden bg-[var(--ink)] pb-[clamp(40px,6vw,80px)] pt-[clamp(150px,24vh,240px)] text-[var(--text)]"
-      style={toneVars}
+      data-variante={variante}
+      className={cn(
+        "relative isolate flex min-h-[85svh] flex-col justify-end overflow-hidden pb-[clamp(40px,6vw,80px)] pt-[clamp(130px,22vh,220px)]",
+        verde ? "bg-[var(--verde)] text-[var(--verde-escuro)]" : "bg-[var(--ink)] text-[var(--text)]",
+      )}
     >
-      <style href="hub-page-hero" precedence="default">
-        {PAGE_HERO_CSS}
-      </style>
-
-      {/* ---- background ---- */}
+      {/* ---- fundo: linhas em "casa" ---- */}
       <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden>
         <div data-page-hero-parallax className="absolute inset-0">
-          <div className="absolute inset-0">
-            <div
-              className="hub-mesh-a absolute left-[10%] top-[-10%] h-[70vh] w-[70vh] rounded-full opacity-60 blur-[90px]"
-              style={{ background: `radial-gradient(circle, rgba(var(--tone-glow),.55) 0%, rgba(var(--tone-glow),0) 70%)` }}
-            />
-            <div
-              className="hub-mesh-b absolute right-[-10%] top-[10%] h-[60vh] w-[60vh] rounded-full opacity-50 blur-[100px]"
-              style={{ background: "radial-gradient(circle, rgba(107,168,79,.5) 0%, rgba(107,168,79,0) 70%)" }}
-            />
-            <div
-              className="hub-mesh-c absolute bottom-[-20%] left-[35%] h-[55vh] w-[55vh] rounded-full opacity-40 blur-[110px]"
-              style={{ background: "radial-gradient(circle, rgba(95,194,174,.45) 0%, rgba(95,194,174,0) 70%)" }}
+          <div data-page-hero-glow className={cn("absolute", verde ? "-right-[12%] -top-[6%] h-[125%] w-[62%]" : "-right-[18%] -top-[18%] h-[130%] w-[60%]")}>
+            <LinhasCasa
+              className="size-full"
+              cor={verde ? "var(--verde-escuro)" : "var(--verde)"}
+              linhas={verde ? 8 : 6}
+              opacidade={verde ? 0.6 : 0.35}
             />
           </div>
         </div>
-
-        {/* tone tint → ink */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(180deg, rgba(11,22,16,.2) 0%, rgba(11,22,16,.55) 60%, var(--ink,#0B1610) 100%)`,
-          }}
-        />
-
-        {/* dot grid */}
-        <div
-          className="dot-grid absolute inset-0 opacity-40"
-          style={{
-            backgroundImage: "radial-gradient(rgba(232,240,220,.13) 1px, transparent 1.2px)",
-            backgroundSize: "26px 26px",
-            maskImage: "radial-gradient(75% 70% at 50% 60%, #000 30%, transparent 100%)",
-            WebkitMaskImage: "radial-gradient(75% 70% at 50% 60%, #000 30%, transparent 100%)",
-          }}
-        />
-
-        {/* tone radial glow */}
-        <div
-          data-page-hero-glow
-          className="absolute left-1/2 top-[55%] h-[90vmin] w-[140vmin] -translate-x-1/2 -translate-y-1/2 opacity-0"
-          style={{
-            background: `radial-gradient(closest-side, rgba(var(--tone-glow),.32) 0%, rgba(var(--tone-glow),.10) 40%, rgba(var(--tone-glow),0) 100%)`,
-          }}
-        />
+        {!verde && <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[var(--ink)] to-transparent" />}
       </div>
 
-      {/* ---- content ---- */}
-      <div
-        data-page-hero-content
-        className="container-hub relative z-10 mx-auto w-full max-w-[1440px] px-[clamp(20px,5vw,80px)]"
-      >
-        <p
-          data-page-hero-item
-          className={cn("eyebrow", MONO, "text-[11px] uppercase tracking-[0.18em] text-[var(--tone)] md:text-[12px]")}
-          style={{ opacity: 0 }}
-        >
-          {eyebrow}
-        </p>
+      {/* ---- conteúdo ---- */}
+      <div data-page-hero-content className="container-hub relative z-10 w-full">
+        <div className="flex items-start justify-between gap-8">
+          <div className="min-w-0">
+            <p data-page-hero-item className={cn("eyebrow", verde ? "text-[var(--verde-escuro)]" : "text-[var(--verde)]")} style={{ opacity: 0 }}>
+              {eyebrow}
+            </p>
 
-        <SplitHeading
-          as="h1"
-          type="chars"
-          trigger="ready"
-          delay={0.2}
-          className={cn(
-            "display",
-            DISPLAY,
-            "mt-[clamp(14px,2vw,26px)] max-w-[14ch] text-[clamp(3.5rem,9vw,9.5rem)] font-medium leading-[0.92] tracking-[-0.035em] text-[var(--text)]",
-            "[&_em]:font-[family-name:var(--font-serif)] [&_em]:font-normal [&_em]:italic [&_em]:text-[var(--tone)]",
-          )}
-        >
-          {title}
-        </SplitHeading>
+            <SplitHeading
+              as="h1"
+              type="words"
+              trigger="ready"
+              delay={0.2}
+              className={cn(
+                "display titulo-secao mt-[clamp(14px,2vw,26px)] max-w-[13ch] text-[clamp(3rem,7.6vw,8rem)] leading-[0.92]",
+                verde ? "text-[var(--verde-escuro)] [&_em]:text-white" : "text-[var(--verde-escuro)] [&_em]:text-[var(--verde)]",
+              )}
+            >
+              {title}
+            </SplitHeading>
+
+            {selo ? (
+              <div data-page-hero-item className="mt-[clamp(16px,2vw,28px)]" style={{ opacity: 0 }}>
+                <span className="selo px-5 py-2 text-[15px] tracking-[0.3em]">{selo}</span>
+              </div>
+            ) : null}
+          </div>
+
+          {verde ? (
+            <div data-page-hero-item className="hidden shrink-0 md:block" style={{ opacity: 0 }}>
+              <LogoHSI cor="branco" altura={176} priority />
+            </div>
+          ) : null}
+        </div>
 
         {description ? (
           <p
             data-page-hero-item
-            className="mt-[clamp(20px,2.6vw,36px)] max-w-[52ch] text-[15px] leading-[1.55] text-[var(--text-2)] md:text-[17px]"
+            className={cn(
+              "mt-[clamp(20px,2.6vw,36px)] max-w-[56ch] text-[15px] leading-[1.55] md:text-[17.5px]",
+              verde ? "font-medium text-[var(--verde-escuro)]" : "text-[var(--text-2)]",
+            )}
             style={{ opacity: 0 }}
           >
             {description}
@@ -201,7 +150,7 @@ export function PageHero({ eyebrow, title, description, tone, kpis, children }: 
         {kpis ? (
           <div
             data-page-hero-item
-            className="mt-[clamp(36px,5vw,72px)] border-t border-[var(--line)] pt-[clamp(20px,3vw,36px)]"
+            className={cn("mt-[clamp(32px,4.5vw,64px)] border-t pt-[clamp(20px,3vw,36px)]", verde ? "border-[var(--verde-escuro)]/25" : "border-[var(--line)]")}
             style={{ opacity: 0 }}
           >
             {kpis}

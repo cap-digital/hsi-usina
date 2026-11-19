@@ -13,7 +13,7 @@ export interface VizTooltipProps {
   children: ReactNode;
 }
 
-/** Balão flutuante compartilhado pelos gráficos (vidro escuro, mono nos rótulos). */
+/** Balão flutuante compartilhado pelos gráficos (branco, borda verde). */
 export function VizTooltip({ x, y, width, open, children }: VizTooltipProps) {
   const flip = x > width - 240;
   return (
@@ -24,7 +24,7 @@ export function VizTooltip({ x, y, width, open, children }: VizTooltipProps) {
           animate={{ opacity: 1, scale: 1, x: flip ? x - 16 : x + 16, y: y - 12 }}
           exit={{ opacity: 0, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.6 }}
-          className="pointer-events-none absolute left-0 top-0 z-20 min-w-[200px] max-w-[280px] rounded-[12px] border border-line-strong bg-[rgba(19,36,26,.94)] px-4 py-3 shadow-[0_24px_60px_-20px_rgba(0,0,0,.8)] backdrop-blur-md"
+          className="pointer-events-none absolute left-0 top-0 z-20 min-w-[200px] max-w-[280px] rounded-[12px] border border-line-strong bg-white/95 px-4 py-3 shadow-[0_24px_60px_-24px_rgba(0,99,26,.45)] backdrop-blur-md"
           style={{ translateX: flip ? "-100%" : "0%", translateY: "-100%" }}
         >
           {children}
@@ -35,7 +35,7 @@ export function VizTooltip({ x, y, width, open, children }: VizTooltipProps) {
 }
 
 export function TipTitle({ children }: { children: ReactNode }) {
-  return <p className="display text-[15px] leading-tight tracking-[-0.01em] text-text">{children}</p>;
+  return <p className="display text-[15px] leading-tight tracking-[-0.01em] text-[var(--verde-escuro)]">{children}</p>;
 }
 
 export function TipRow({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
@@ -45,7 +45,7 @@ export function TipRow({ label, value, color }: { label: string; value: ReactNod
         {color && <span className="size-2 rounded-full" style={{ background: color }} />}
         {label}
       </span>
-      <span className="font-mono text-text tabular">{value}</span>
+      <span className="font-semibold text-text tabular">{value}</span>
     </div>
   );
 }

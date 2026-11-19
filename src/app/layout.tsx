@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Work_Sans } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { SmoothScroll } from "@/components/core/smooth-scroll";
@@ -11,52 +11,39 @@ import { Footer } from "@/components/nav/footer";
 import { PainelProvider, type PainelMeta } from "@/data/provider";
 import snapshot from "@/data/snapshot.json";
 import type { Snapshot } from "@/data/types";
-import { fmtNotaAnoAnterior } from "@/data/format";
+import { NOTA_2025 } from "@/data/format";
 
-const display = Plus_Jakarta_Sans({
+const workSans = Work_Sans({
   subsets: ["latin"],
   weight: "variable",
-  variable: "--font-jakarta",
+  variable: "--font-work-sans",
   display: "swap",
 });
 
-const sans = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
-  display: "swap",
-});
+const s = snapshot as Snapshot;
 
-const mono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
-  display: "swap",
-});
-
-const serif = Fraunces({
-  subsets: ["latin"],
-  weight: "variable",
-  style: ["normal", "italic"],
-  variable: "--font-fraunces",
-  display: "swap",
-});
+const TITULO = "Hospital Santa Izabel · Relatório de Desempenho · Meta 2026";
+const DESCRICAO =
+  "Relatório de desempenho do Hospital Santa Izabel na Meta (Facebook e Instagram) em 2026: investimento, impressões, alcance, engajamento, campanhas, público e criativos de 1º de janeiro a 31 de outubro.";
 
 export const metadata: Metadata = {
-  title: "Hospital Santa Izabel · Balanço de mídia 2026",
-  description:
-    "Balanço de mídia do Hospital Santa Izabel em 2026 até aqui: investimento, impressões, cliques e engajamento no Meta Ads e no Google Ads, com as campanhas ainda no ar.",
-  applicationName: "Balanço de mídia · Hospital Santa Izabel",
+  title: TITULO,
+  description: DESCRICAO,
+  applicationName: "Relatório de Desempenho · Hospital Santa Izabel",
+  authors: [{ name: "Hospital Santa Izabel" }],
+  creator: "Hospital Santa Izabel",
+  publisher: "Hospital Santa Izabel",
+  openGraph: { title: TITULO, description: DESCRICAO, siteName: "Hospital Santa Izabel", locale: "pt_BR", type: "website" },
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1610",
-  colorScheme: "dark",
+  themeColor: "#2EB038",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
 };
-
-const s: Snapshot = snapshot;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   const painel: PainelMeta = {
@@ -65,13 +52,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     atualizadoEm: s.atualizadoEm,
     // Avisos do build só em dev (o rodapé não os mostra em produção, e nem chegam ao payload).
     avisos: process.env.NODE_ENV !== "production" ? s.avisos : [],
-    notas: s.frentes.map((f) => fmtNotaAnoAnterior(f, s.periodo.inicio)).filter((n): n is string => Boolean(n)),
+    notas: [NOTA_2025],
   };
   return (
-    <html
-      lang="pt-BR"
-      className={cn("dark", display.variable, sans.variable, mono.variable, serif.variable, "antialiased")}
-    >
+    <html lang="pt-BR" className={cn(workSans.variable, "antialiased")}>
       <body className="flex min-h-svh flex-col">
         <PainelProvider value={painel}>
           <SmoothScroll>

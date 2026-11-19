@@ -1,54 +1,57 @@
 import type { Metadata } from "next";
 import { ChartFrame } from "@/components/core/chart-frame";
 import { KpiTile } from "@/components/core/kpi-tile";
+import { Reveal } from "@/components/core/reveal";
 import { Section } from "@/components/core/section";
 import { PageHero } from "@/components/hero/page-hero";
 import { CriativosGrid } from "@/components/paginas/criativos";
 import { EntregaPublico } from "@/components/paginas/entrega-publico";
-import { PalavrasChave, PalavrasChavePdf } from "@/components/paginas/palavras-chave";
 import { HBars } from "@/components/viz/hbars";
-import { Retencao, SplitBar } from "@/components/viz/small";
-import { CRIATIVOS_NO_ANO, fmtBRL, fmtCompact, fmtExtenso, fmtMetricaPrincipal, fmtMil, fmtNum, fmtPct } from "@/data/format";
+import { NOTA_2025, fmtBRL, fmtCompact, fmtCusto, fmtExtenso, fmtMeses, fmtMil, fmtNum, fmtPct, metricaPrincipal } from "@/data/format";
 import snapshot from "@/data/snapshot.json";
-import type { Snapshot } from "@/data/types";
+import type { Criativo, Estrategia, Snapshot } from "@/data/types";
 
-export const metadata: Metadata = { title: "Mídia · Hospital Santa Izabel" };
+export const metadata: Metadata = { title: "Mídia · Hospital Santa Izabel · Relatório de Desempenho Meta 2026" };
 
-const s: Snapshot = snapshot;
+const s = snapshot as Snapshot;
 
-const COR: Record<string, string> = { Meta: "var(--amber)", Google: "var(--dusk-2)" };
-const IDADE: Record<string, string> = { desconhecida: "Não informada" };
+const COR_GRUPO: Record<string, string> = { "Always On": "var(--verde)", "Campanha especial": "var(--verde-escuro)" };
+
+/** Criativos de todas as estratégias, por impressões, sem repetir a mesma peça. */
+function criativosUnicos(lista: Criativo[]): Criativo[] {
+  const vistos = new Set<string>();
+  return [...lista]
+    .sort((a, b) => b.impressoes - a.impressoes)
+    .filter((c) => (vistos.has(c.chaveImagem) ? false : (vistos.add(c.chaveImagem), true)));
+}
 
 export default function Midia() {
   const t = s.totais;
-  const meta = s.plataformas.find((p) => p.plataforma === "Meta")!;
-  const google = s.plataformas.find((p) => p.plataforma === "Google")!;
   const porInvestimento = [...s.estrategias].sort((a, b) => b.investimento - a.investimento);
-  const porCliques = [...s.estrategias].sort((a, b) => b.cliques - a.cliques);
-  const b = s.busca;
-  const v = s.video;
-  const e = s.engajamento;
-  const totalIdadeGoogle = s.publico.googleIdade.reduce((a, x) => a + x.impressoes, 0) || 1;
+  const porImpressoes = [...s.estrategias].sort((a, b) => b.impressoes - a.impressoes);
+  const maior = porInvestimento[0];
+  const criativos = criativosUnicos(s.criativos);
+  const pub = s.publico;
+  const totPub = pub.reduce((a, p) => a + p.impressoes, 0) || 1;
+  const mulheres = pub.filter((p) => p.genero === "female").reduce((a, p) => a + p.impressoes, 0) / totPub;
 
   return (
     <main>
       <PageHero
-        tone="amber"
-        image="none"
-        eyebrow={`Mídia · Meta Ads × Google Ads · ${s.estrategias.length} estratégias`}
+        eyebrow={`Mídia · ${s.estrategias.length} estratégias · Facebook + Instagram`}
         title={
           <>
-            Cada real, <em>cada tela.</em>
+            Onde o investimento <em>apareceu.</em>
           </>
         }
-        description={`${fmtMil(t.investimento)} investidos em ${fmtNum(t.campanhas)} campanhas e ${s.estrategias.length} estratégias: ${fmtCompact(t.impressoes, 2)} de impressões, ${fmtCompact(t.cliques)} cliques e ${fmtCompact(t.engajamento)} engajamentos.`}
+        description={`${fmtMil(t.investimento)} em ${fmtNum(t.campanhas)} campanhas e ${s.estrategias.length} estratégias: ${fmtCompact(t.impressoes, 1)} de impressões, ${fmtCompact(t.alcance, 1)} de pessoas alcançadas e ${fmtCompact(t.engajamento, 2)} de engajamentos.`}
         kpis={
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} tone="amber" hint="Meta + Google, valor ao cliente" />
-            <KpiTile label="Impressões" value={t.impressoes} format="compact" decimals={2} />
+            <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} hint="Valor do Gerenciador de Anúncios" />
             <KpiTile label="CPM" value={t.cpm} format="currency" decimals={2} hint="Custo por mil impressões" />
-            <KpiTile label="CTR" value={t.ctr * 100} format="percent" decimals={2} hint="Cliques ÷ impressões" />
-            <KpiTile label="Cliques" value={t.cliques} format="compact" decimals={0} hint={`CPC de ${fmtBRL(t.cpc, { decimals: 2 })}`} className="col-span-2 md:col-span-1" />
+            <KpiTile label="Custo por engajamento" value={t.custoEngajamento} format="currency" decimals={3} hint={`${fmtCompact(t.engajamento, 2)} engajamentos`} />
+            <KpiTile label="CPC" value={t.cpc} format="currency" decimals={2} hint={`Por clique no link · ${fmtCompact(t.cliquesLink, 1)} cliques`} />
+            <KpiTile label="CTR" value={t.ctr * 100} format="percent" decimals={2} hint="Cliques ÷ impressões" className="col-span-2 md:col-span-1" />
           </div>
         }
       />
@@ -56,111 +59,61 @@ export default function Midia() {
       <Section
         index="01"
         eyebrow="Estratégias"
+        nota={NOTA_2025}
         title={
           <>
-            {fmtExtenso(s.estrategias.length, true)} estratégias, <em>cada uma</em> com a sua meta.
+            {fmtExtenso(s.estrategias.length, true)} estratégias, <em>cada uma</em> com a sua métrica.
           </>
         }
-        description="À esquerda, onde o investimento foi, com a métrica que cada estratégia tinha como meta. À direita, quem trouxe os cliques."
+        description={`${maior.estrategia} recebeu a maior parte do investimento (${fmtPct(maior.investimento / t.investimento, 0)}). Alcance, Posts de oportunidade e Curativos Especiais são medidos por impressões e CPM; Engajamento e Faz Bem, por engajamentos e custo por engajamento; Tráfego, por cliques no link e CPC.`}
       >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {s.estrategias.map((e, i) => (
+            <CartaoEstrategia key={e.estrategia} e={e} i={i} />
+          ))}
+        </div>
+      </Section>
+
+      {/* Rankings em seção própria: no PDF a seção de estratégias cabe numa página sem zoom excessivo. */}
+      <Section eyebrow="Estratégias · comparativo">
         <div className="grid gap-4 lg:grid-cols-2">
-          <ChartFrame eyebrow="Investimento por estratégia" title="Onde o dinheiro foi" minHeight={380}>
+          <ChartFrame eyebrow="Investimento por estratégia" title="Para onde foi o investimento" minHeight={340}>
             <HBars
               items={porInvestimento.map((x) => ({
-                key: `${x.plataforma}-${x.estrategia}`,
+                key: x.estrategia,
                 label: x.estrategia,
                 value: x.investimento,
                 display: fmtBRL(x.investimento, { compact: true }),
-                sub: `${x.plataforma} · ${fmtMetricaPrincipal(x)}`,
-                color: COR[x.plataforma],
+                sub: `${x.grupo} · ${fmtPct(x.investimento / t.investimento, 1)} do total`,
+                color: COR_GRUPO[x.grupo],
               }))}
             />
           </ChartFrame>
-          <ChartFrame eyebrow="Cliques por estratégia" title="Quem trouxe os cliques" minHeight={380} tone="dusk">
+          <ChartFrame eyebrow="Impressões por estratégia" title="Quem mais apareceu" minHeight={340}>
             <HBars
-              items={porCliques.map((x) => ({
-                key: `${x.plataforma}-${x.estrategia}`,
+              items={porImpressoes.map((x) => ({
+                key: x.estrategia,
                 label: x.estrategia,
-                value: x.cliques,
-                display: fmtCompact(x.cliques),
-                sub: `${x.plataforma} · CTR ${fmtPct(x.ctr, 2)} · CPC ${fmtBRL(x.cpc, { decimals: 2 })}`,
-                color: COR[x.plataforma],
+                value: x.impressoes,
+                display: fmtCompact(x.impressoes, 1),
+                sub: `CPM ${fmtBRL(x.cpm)} · ${fmtCompact(x.engajamento)} engajamentos`,
+                color: COR_GRUPO[x.grupo],
               }))}
             />
           </ChartFrame>
         </div>
-      </Section>
-
-      <Section
-        index="02"
-        eyebrow="Busca no Google"
-        tone="dusk"
-        title={
-          <>
-            {fmtPct(b.ctr)} das impressões na busca <em>viraram clique.</em>
-          </>
-        }
-        description={`Quem procurou o hospital no Google encontrou o anúncio: ${fmtCompact(b.cliques, 1)} cliques a ${fmtBRL(b.cpc, { decimals: 2 })} cada, com ${fmtBRL(b.investimento, { compact: true })} investidos na Pesquisa.`}
-      >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_1fr]">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
-            <KpiTile label="Cliques na busca" value={b.cliques} format="compact" decimals={1} tone="dusk" className="col-span-2 lg:col-span-1" />
-            <KpiTile label="CTR" value={b.ctr * 100} format="percent" decimals={1} />
-            <KpiTile label="CPC" value={b.cpc} format="currency" decimals={2} />
-          </div>
-          <ChartFrame
-            eyebrow="Anúncios de texto"
-            title={`Os ${b.anuncios.length} anúncios com mais cliques`}
-            subtitle="Títulos de cada anúncio, como apareceram na busca"
-            minHeight={200}
-            lazy={false}
-            tone="dusk"
-          >
-            <ul className="divide-y divide-line">
-              {b.anuncios.map((a) => (
-                <li key={a.titulos.join("|")} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 py-3">
-                  <div className="min-w-0">
-                    <span className="text-[14px] font-medium text-text">{a.titulos[0]}</span>
-                    <span className="ml-3 font-mono text-[11px] text-text-3">{a.titulos.slice(1).join(" · ")}</span>
-                  </div>
-                  <span className="shrink-0 font-mono text-[12px] text-text-2 tabular">
-                    <span className="text-text">{fmtNum(a.cliques)}</span> cliques · CTR {fmtPct(a.ctr)} · CPC {fmtBRL(a.cpc, { decimals: 2 })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </ChartFrame>
+        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[12.5px] text-text-2">
+          <span className="flex items-center gap-2">
+            <span className="size-2.5 rounded-full bg-[var(--verde)]" /> Always On
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="size-2.5 rounded-full bg-[var(--verde-escuro)]" /> Campanhas especiais
+          </span>
         </div>
-        {/* Tela: abas por frente. No PDF este bloco sai e as palavras-chave ganham a página seguinte (sem abas). */}
-        <ChartFrame
-          eyebrow="Google Pesquisa · palavras-chave"
-          title="Palavras-chave que mais trouxeram cliques"
-          subtitle="Os termos comprados na busca, por frente, ordenados pela métrica escolhida"
-          minHeight={420}
-          tone="dusk"
-          className="no-print mt-4"
-        >
-          <PalavrasChave dados={b.palavrasChave} />
-        </ChartFrame>
       </Section>
 
-      {/* Só no PDF: uma página com as duas frentes, uma abaixo da outra, top 10 cada. */}
       <Section
         index="02"
-        eyebrow="Busca no Google · palavras-chave"
-        tone="dusk"
-        className="so-pdf"
-        title={
-          <>
-            Palavras-chave que <em>mais trouxeram cliques.</em>
-          </>
-        }
-      >
-        <PalavrasChavePdf dados={b.palavrasChave} />
-      </Section>
-
-      <Section
-        index="03"
         eyebrow="Público"
         title={
           <>
@@ -169,125 +122,20 @@ export default function Midia() {
         }
         description={
           <>
-            No Meta, entrega por gênero e faixa etária<span className="no-print">; escolha o tipo de entrega</span>. No Google, a faixa etária vem
-            só das campanhas Faz Bem.
+            Entrega por gênero e faixa etária<span className="no-print">; escolha o indicador</span>. As mulheres receberam {fmtPct(mulheres, 0)} das
+            impressões com idade e gênero informados.
           </>
         }
       >
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          <ChartFrame eyebrow="Meta · gênero × idade" title="Entrega por gênero e idade" minHeight={420}>
-            <EntregaPublico linhas={s.publico.meta} />
-          </ChartFrame>
-          <ChartFrame eyebrow="Google · idade" title="Impressões por faixa etária" subtitle="Só Faz Bem" minHeight={420} tone="dusk">
-            <HBars
-              items={s.publico.googleIdade.map((x) => ({
-                key: x.chave,
-                label: IDADE[x.chave] ?? x.chave,
-                value: x.impressoes,
-                display: fmtPct(x.impressoes / totalIdadeGoogle, 1),
-                sub: `${fmtCompact(x.impressoes)} impressões · ${fmtNum(x.cliques)} cliques`,
-                color: "var(--dusk-2)",
-              }))}
-            />
-          </ChartFrame>
-        </div>
+        <ChartFrame eyebrow="Gênero × idade" title="Entrega por gênero e idade" minHeight={420}>
+          <EntregaPublico linhas={pub} />
+        </ChartFrame>
       </Section>
 
       <Section
-        index="04"
-        eyebrow="Plataformas"
-        title={
-          <>
-            O Meta trouxe a <em>escala;</em> o Google, a <em>intenção.</em>
-          </>
-        }
-        description={`${
-          Math.abs(meta.investimento - google.investimento) / t.investimento < 0.05
-            ? "Com investimentos quase iguais"
-            : `Com ${fmtPct(meta.investimento / t.investimento, 0)} da verba no Meta e ${fmtPct(google.investimento / t.investimento, 0)} no Google`
-        }, o Meta entregou ${fmtPct(meta.impressoes / t.impressoes, 0)} das impressões e o Google, ${fmtPct(google.cliques / t.cliques, 0)} dos cliques.`}
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ChartFrame eyebrow="Impressões" title="Quem colocou o hospital na tela" minHeight={72} lazy={false}>
-            <SplitBar
-              parts={[
-                { label: "Meta", value: meta.impressoes, color: "var(--amber)" },
-                { label: "Google", value: google.impressoes, color: "var(--dusk-2)" },
-              ]}
-            />
-          </ChartFrame>
-          <ChartFrame eyebrow="Cliques" title="Quem levou o público ao hospital" minHeight={72} lazy={false} tone="dusk">
-            <SplitBar
-              parts={[
-                { label: "Meta", value: meta.cliques, color: "var(--amber)" },
-                { label: "Google", value: google.cliques, color: "var(--dusk-2)" },
-              ]}
-            />
-          </ChartFrame>
-        </div>
-      </Section>
-
-      <Section
-        index="05"
-        eyebrow="Engajamento"
-        title={
-          <>
-            {fmtCompact(e.total)} engajamentos <em>com os posts</em> no Meta.
-          </>
-        }
-        description={`O total é o engajamento do post, como o Meta conta. As cinco interações ao lado são um recorte e não somam o total. Com os ${fmtCompact(e.youtube)} engajamentos do YouTube, são ${fmtCompact(t.engajamento)} no período.`}
-      >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <KpiTile label="Engajamento · Meta" value={e.total} format="compact" decimals={1} tone="amber" hint="Engajamento do post" />
-          <KpiTile label="Reações" value={e.reacoes} format="compact" decimals={1} />
-          <KpiTile label="Comentários" value={e.comentarios} format="compact" decimals={1} />
-          <KpiTile label="Compartilhamentos" value={e.compartilhamentos} format="compact" decimals={1} />
-          <KpiTile label="Salvamentos" value={e.salvamentos} format="compact" decimals={1} />
-          <KpiTile label="Cliques no link" value={e.cliquesLink} format="compact" decimals={1} />
-        </div>
-      </Section>
-
-      <Section
-        index="06"
-        eyebrow="Vídeo"
-        title={
-          <>
-            No YouTube, {Math.round((v.youtube.p25 ? v.youtube.p100 / v.youtube.p25 : 0) * 10)} em cada 10 <em>foram até o fim.</em>
-          </>
-        }
-        description={`${fmtCompact(v.meta.views, 2)} views de vídeo no Meta e ${fmtCompact(v.youtube.views, 1)} no YouTube. As curvas mostram, de quem chegou a 25% do vídeo, quantos seguiram até cada marco: no Meta, ${fmtPct(v.meta.p25 ? v.meta.p100 / v.meta.p25 : 0, 0)} foram até o fim. No YouTube os quartis são estimados.`}
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ChartFrame eyebrow="Meta · retenção de vídeo" title="Quem ficou até o fim" footer={`${fmtCompact(v.meta.views, 2)} views`} minHeight={280}>
-            <Retencao
-              etapas={[
-                { label: "25%", value: v.meta.p25 },
-                { label: "50%", value: v.meta.p50 },
-                { label: "75%", value: v.meta.p75 },
-                { label: "100%", value: v.meta.p100 },
-              ]}
-              soPct
-            />
-          </ChartFrame>
-          <ChartFrame eyebrow="YouTube · retenção de vídeo" title="Quem ficou até o fim" footer={`${fmtCompact(v.youtube.views, 1)} views · quartis estimados`} minHeight={280} tone="dusk">
-            <Retencao
-              etapas={[
-                { label: "25%", value: v.youtube.p25 },
-                { label: "50%", value: v.youtube.p50 },
-                { label: "75%", value: v.youtube.p75 },
-                { label: "100%", value: v.youtube.p100 },
-              ]}
-              soPct
-              rgb="95,194,174"
-            />
-          </ChartFrame>
-        </div>
-      </Section>
-
-      <Section
-        index="07"
-        eyebrow="Alguns dos criativos veiculados · seleção por entrega"
-        nota={CRIATIVOS_NO_ANO["Mídia"]}
+        index="03"
+        eyebrow="Criativos"
+        nota={`Seleção por entrega: as peças com mais impressões entre os ${fmtNum(t.anuncios)} anúncios do período.`}
         title={
           <>
             As peças que <em>mais apareceram.</em>
@@ -295,13 +143,57 @@ export default function Midia() {
         }
         description={
           <>
-            Os criativos ordenados por impressões, com a frente e o investimento de cada um.
-            <span className="no-print"> Abra o post no Instagram ou o vídeo no YouTube quando houver link.</span>
+            Criativos ordenados por impressões. Nos de alcance aparece o CPM; nos de engajamento, o custo por engajamento; nos de tráfego, o CPC.
+            <span className="no-print"> Abra o post em “Ver anúncio”.</span>
           </>
         }
       >
-        <CriativosGrid criativos={s.criativos} />
+        <CriativosGrid criativos={criativos} />
       </Section>
     </main>
+  );
+}
+
+function CartaoEstrategia({ e, i }: { e: Estrategia; i: number }) {
+  const p = metricaPrincipal(e, e.principal);
+  return (
+    <Reveal className="hub-card flex flex-col gap-5 p-6 md:p-7" y={24} delay={(i % 3) * 0.05}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="eyebrow text-[var(--verde-escuro)]">{e.grupo}</span>
+          <h3 className="display titulo-secao mt-2 text-[1.45rem] text-[var(--verde-escuro)]">{e.estrategia}</h3>
+        </div>
+        <span className="selo shrink-0 !px-3 !text-[10px]">{fmtMeses(e.meses)}</span>
+      </div>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <span className="display block text-[2.3rem] font-black leading-none text-[var(--verde)] tabular">{fmtCompact(p.valor, 1)}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.rotulo}</span>
+        </div>
+        <div className="text-right">
+          <span className="block text-[1.2rem] font-bold text-[var(--verde-escuro)] tabular">{fmtCusto(p.custo, e.principal)}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.custoRotulo}</span>
+        </div>
+      </div>
+      <dl className="grid grid-cols-3 gap-3 border-t border-line pt-4 text-[12px]">
+        <div>
+          <dt className="text-text-3">Investimento</dt>
+          <dd className="font-bold text-text tabular">{fmtBRL(e.investimento, { compact: true })}</dd>
+        </div>
+        <div>
+          <dt className="text-text-3">{e.principal === "impressoes" ? "Alcance" : "Impressões"}</dt>
+          <dd className="font-bold text-text tabular">
+            {fmtCompact(e.principal === "impressoes" ? e.alcance : e.impressoes, 1)}
+            {e.principal === "impressoes" && e.alcanceSomado ? "*" : ""}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-text-3">Campanhas</dt>
+          <dd className="font-bold text-text tabular">{e.campanhas}</dd>
+        </div>
+      </dl>
+      {e.principal === "impressoes" && e.alcanceSomado && (
+        <p className="-mt-2 text-[10.5px] text-text-3">* soma do alcance de cada campanha</p>
+      )}    </Reveal>
   );
 }

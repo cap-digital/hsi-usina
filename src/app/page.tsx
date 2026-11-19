@@ -8,70 +8,45 @@ import { PortasCards } from "@/components/paginas/portas";
 import { GradeEstrategias } from "@/components/viz/grade-estrategias";
 import { MonthlyChart } from "@/components/viz/monthly-chart";
 import { SplitBar } from "@/components/viz/small";
-import { fmtBRL, fmtCompact, fmtDia, fmtLista, fmtMil, fmtNum, fmtPct, fmtUmEmCada, rodou } from "@/data/format";
+import { fmtBRL, fmtCompact, fmtDec, fmtExtenso, fmtLista, fmtMil, fmtNum, fmtPct } from "@/data/format";
 import snapshot from "@/data/snapshot.json";
 import type { Snapshot } from "@/data/types";
 
-const s: Snapshot = snapshot;
-
+const s = snapshot as Snapshot;
 
 export default function Home() {
   const t = s.totais;
-  const meta = s.plataformas.find((p) => p.plataforma === "Meta")!;
-  const google = s.plataformas.find((p) => p.plataforma === "Google")!;
-  const ANO = s.periodo.inicio.slice(0, 4);
-  // O mosaico conta a partir de janeiro do ano do relatório; meses do ano anterior (dez/25) aparecem, mas não são o ponto de partida.
-  const mesesAno = s.meses.filter((m) => !m.anoAnterior);
-  const primeiro = mesesAno[0];
-  const ativasJan = primeiro?.estrategiasAtivas ?? 0;
-  const ativasMax = Math.max(...mesesAno.map((m) => m.estrategiasAtivas));
-  const mesesNoMax = mesesAno.filter((m) => m.estrategiasAtivas === ativasMax).map((m) => m.nome);
-  const ultimo = s.meses[s.meses.length - 1];
-  // Início dos dados (pode ser anterior ao período: Curativos começa em dez/25).
-  const inicioDados = s.plataformas.reduce((a, p) => (p.inicio < a ? p.inicio : a), s.periodo.inicio);
-  // Contagem pela grade, com a mesma regra das células (investimento 0 e impressões 0 = não rodou).
-  const celulasDoMes = (mes: string) => s.grade.celulas.filter((c) => c.mes === mes && rodou(c));
-  const plataformasJan = [...new Set(celulasDoMes(primeiro?.mes ?? "").map((c) => c.plataforma))];
-  const ativasUltimo = celulasDoMes(ultimo.mes).length;
-  // Legenda do KPI de investimento: "100% do contratado no período (dez/25 → out/26)".
-  const mesCurto = (m: (typeof s.meses)[number]) => `${m.rotulo.split("/")[0]}/${m.mes.slice(2, 4)}`;
-  const pctContratado = Math.round((t.investimento / (t.contratado || 1)) * 100);
-
-  // Mês a mês: antes e depois da entrada do Meta.
-  const mesMeta = meta.inicio.slice(0, 7);
-  const antes = s.meses.filter((m) => m.mes < mesMeta);
-  const depois = s.meses.filter((m) => m.mes >= mesMeta && !m.parcial);
-  const soma = (ms: typeof s.meses, f: (m: (typeof s.meses)[number]) => number) => ms.reduce((a, m) => a + f(m), 0);
-  const nomeMes = (mes: string) => s.meses.find((m) => m.mes === mes)?.nome ?? mes;
-  const metaDepois = soma(depois, (m) => m.meta.investimento) / (soma(depois, (m) => m.total.investimento) || 1);
-  const impAntes = soma(antes, (m) => m.total.impressoes) / (antes.length || 1);
-  const impDepois = soma(depois, (m) => m.total.impressoes) / (depois.length || 1);
+  const meses = s.meses;
+  const nomes = meses.map((m) => m.nome);
+  const primeiroTri = meses.filter((m) => m.mes < "2026-04");
+  const invTri = primeiroTri.reduce((a, m) => a + m.investimento, 0);
+  const out = meses.find((m) => m.mes === "2026-10");
+  const maiorMes = [...meses].sort((a, b) => b.investimento - a.investimento)[0];
+  const alwaysOn = s.estrategias.filter((e) => e.grupo === "Always On").reduce((a, e) => a + e.investimento, 0);
+  const especiais = t.investimento - alwaysOn;
 
   return (
     <main>
       <PageHero
-        tone="amber"
-        image="none"
-        eyebrow={`Balanço de mídia · ${s.cliente} · ${s.periodo.inicio.slice(0, 4)} até ${fmtDia(s.periodo.fim)}`}
-        title={
-          <>
-            2026, <em>até aqui.</em>
-          </>
-        }
+        variante="verde"
+        eyebrow={`${s.cliente} · Facebook + Instagram`}
+        title={<>Relatório de desempenho</>}
+        selo="Meta · 2026"
         description={
           <>
-            {fmtMil(t.investimento)} investidos no Meta e no Google, de {fmtDia(inicioDados, ANO)} a {fmtDia(s.periodo.fim)}, colocaram os
-            anúncios do hospital {fmtCompact(t.impressoes, 2)} de vezes na tela e trouxeram {fmtCompact(t.cliques)} cliques.
+            O balanço do ano na Meta: {fmtMil(t.investimento)} investidos de 1º de janeiro a 31 de outubro colocaram o hospital{" "}
+            {fmtCompact(t.impressoes, 1)} de vezes na tela de {fmtCompact(t.alcance, 1)} de pessoas e geraram {fmtCompact(t.engajamento, 2)} de
+            engajamentos com os posts.
           </>
         }
         kpis={
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} tone="amber" hint={`${pctContratado}% do contratado no período (${mesCurto(s.meses[0])} → ${mesCurto(ultimo)})`} />
-            <KpiTile label="Impressões" value={t.impressoes} format="compact" decimals={2} hint="Vezes que os anúncios apareceram" />
-            <KpiTile label="Cliques" value={t.cliques} format="compact" decimals={0} hint={`CTR de ${fmtPct(t.ctr, 2)}`} />
-            <KpiTile label="Views de vídeo" value={t.views} format="compact" decimals={2} hint="Meta + YouTube" />
-            <KpiTile label="Engajamentos" value={t.engajamento} format="compact" decimals={0} hint="Interações com os posts (Meta) + YouTube" />
-            <KpiTile label="CPC médio" value={t.cpc} format="currency" decimals={2} hint={`CPM médio de ${fmtBRL(t.cpm, { decimals: 2 })}`} />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} hint={fmtBRL(t.investimento)} />
+            <KpiTile label="Impressões" value={t.impressoes} format="compact" decimals={1} hint={`CPM de ${fmtBRL(t.cpm)}`} />
+            <KpiTile label="Alcance" value={t.alcance} format="compact" decimals={2} hint={`Pessoas únicas · frequência ${fmtDec(t.frequencia, 1)}`} />
+            <KpiTile label="Engajamento" value={t.engajamento} format="compact" decimals={2} hint="Interações com os posts" />
+            <KpiTile label="Cliques" value={t.cliques} format="compact" decimals={1} hint={`CTR de ${fmtPct(t.ctr, 2)}`} />
+            <KpiTile label="Cliques no link" value={t.cliquesLink} format="compact" decimals={1} hint={`CPC de ${fmtBRL(t.cpc)}`} />
           </div>
         }
       >
@@ -80,45 +55,33 @@ export default function Home() {
 
       <Section
         index="01"
-        eyebrow="Meta × Google"
+        eyebrow="Big numbers"
         title={
           <>
-            Duas vitrines, <em>papéis diferentes.</em>
+            {fmtCompact(t.impressoes, 1)} de impressões, <em>{fmtCompact(t.alcance, 1)} de pessoas.</em>
           </>
         }
-        description={
-          <>
-            O Meta ficou com {fmtPct(meta.investimento / t.investimento)} do investimento e entregou {fmtPct(meta.impressoes / t.impressoes, 0)} das
-            impressões. O Google ficou com {fmtPct(google.investimento / t.investimento)} e trouxe {fmtPct(google.cliques / t.cliques, 0)} dos cliques.
-          </>
-        }
+        description={`Cada pessoa alcançada viu os anúncios do hospital, em média, ${fmtDec(t.frequencia, 1)} vezes. Mil impressões custaram ${fmtBRL(t.cpm)} e cada engajamento, ${fmtBRL(t.custoEngajamento, { decimals: 3 })}.`}
       >
-        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-16">
-          <Reveal className="hub-card p-7 md:p-9">
-            <span className="eyebrow text-text-3">Investimento por plataforma</span>
-            <span className="display mt-4 block text-[clamp(2.4rem,4vw,3.5rem)] leading-none tracking-[-0.035em] text-text tabular">
-              {fmtMil(t.investimento)}
-            </span>
-            <div className="mt-8">
-              <SplitBar
-                soPct
-                parts={[
-                  { label: `Meta · ${fmtMil(meta.investimento)}`, value: meta.investimento, color: "var(--amber)" },
-                  { label: `Google · ${fmtMil(google.investimento)}`, value: google.investimento, color: "var(--dusk-2)" },
-                ]}
-              />
-            </div>
-            <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.14em] text-text-3">
-              Google desde {fmtDia(google.inicio, ANO)} · Meta desde {fmtDia(meta.inicio, ANO)}
-            </p>
-          </Reveal>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Fato valor={fmtCompact(meta.impressoes, 2)} rotulo="impressões no Meta (Facebook e Instagram)" tom="text-amber" />
-            <Fato valor={fmtCompact(google.cliques, 1)} rotulo="cliques no Google (Pesquisa, Display e YouTube)" tom="text-dusk-2" />
-            <Fato valor={fmtBRL(t.cpm, { decimals: 2 })} rotulo="CPM médio: o custo de mil impressões" />
-            <Fato valor={fmtPct(s.busca.ctr)} rotulo={`CTR da busca no Google: ${fmtUmEmCada(s.busca.ctr)} anúncios vistos virou clique`} tom="text-copper" />
-          </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Fato valor={fmtBRL(t.cpm)} rotulo="CPM: o custo de mil impressões" />
+          <Fato valor={fmtDec(t.frequencia, 1)} rotulo="frequência média: vezes que cada pessoa viu os anúncios" />
+          <Fato valor={fmtNum(t.campanhas)} rotulo={`campanhas com veiculação e ${fmtNum(t.anuncios)} anúncios`} />
+          <Fato valor={fmtExtenso(t.meses)} rotulo={`meses com veiculação: ${fmtLista(nomes)}`} />
         </div>
+        <Reveal className="hub-card mt-4 p-7 md:p-9">
+          <span className="eyebrow text-[var(--verde-escuro)]">Investimento por tipo de campanha</span>
+          <span className="display mt-4 block text-[clamp(2.2rem,3.6vw,3.25rem)] font-black leading-none text-[var(--verde)] tabular">{fmtBRL(t.investimento)}</span>
+          <div className="mt-8">
+            <SplitBar
+              soPct
+              parts={[
+                { label: `Always On · ${fmtMil(alwaysOn)}`, value: alwaysOn, color: "var(--verde)" },
+                { label: `Campanhas especiais (Curativos Especiais e Faz Bem) · ${fmtMil(especiais)}`, value: especiais, color: "var(--verde-escuro)" },
+              ]}
+            />
+          </div>
+        </Reveal>
       </Section>
 
       <Section
@@ -126,68 +89,58 @@ export default function Home() {
         eyebrow="Mês a mês"
         title={
           <>
-            O Google abriu o ano; o Meta <em>entrou em {nomeMes(mesMeta)}.</em>
+            {maiorMes.nome[0].toUpperCase() + maiorMes.nome.slice(1)} abriu o ano <em>com o maior investimento.</em>
           </>
         }
-        description={
-          <>
-            {antes.length > 0 && <>De {antes[0].nome} a {antes[antes.length - 1].nome}, só Google. </>}A partir de {fmtDia(meta.inicio)} o Meta
-            entra e fica com {fmtPct(metaDepois, 0)} da verba dos meses completos seguintes; a média de impressões por mês vai de{" "}
-            {fmtCompact(impAntes, 2)} para {fmtCompact(impDepois, 2)}.{ultimo.parcial && <> {ultimo.nome[0].toUpperCase() + ultimo.nome.slice(1)} vai até {fmtDia(s.periodo.fim)}.</>}
-          </>
-        }
+        description={`${fmtPct(invTri / t.investimento, 0)} do investimento ficou no primeiro trimestre, com ${maiorMes.nome} à frente (${fmtMil(maiorMes.investimento)}). ${
+          out ? `Em outubro foram ${fmtMil(out.investimento)} e ${fmtCompact(out.impressoes, 1)} de impressões, com a estreia da estratégia de tráfego.` : ""
+        }`}
       >
-        <ChartFrame
-          eyebrow="Meta Ads × Google Ads · por mês"
-          title="Investimento e impressões"
-          subtitle="Barras: investimento empilhado por plataforma. Linha: impressões das duas plataformas somadas."
-          span={3}
-          minHeight={420}
-          tone="amber"
-        >
-          <MonthlyChart meses={s.meses} fim={s.periodo.fim} />
+        <ChartFrame eyebrow="Investimento e impressões por mês" title="Os meses com veiculação" subtitle="Barras: investimento. Linha: impressões." span={3} minHeight={420}>
+          <MonthlyChart meses={meses} />
         </ChartFrame>
       </Section>
 
       <Section
         index="03"
-        eyebrow="O ano em mosaico"
+        eyebrow="Estratégia × mês"
         title={
           <>
-            De {ativasJan} para {ativasMax} <em>estratégias no ar.</em>
+            O que rodou <em>em cada mês.</em>
           </>
         }
-        description={`Cada linha é uma estratégia, cada coluna um mês; quanto mais clara a célula, maior o investimento, e vazia quando a estratégia não rodou. O ano começou com ${ativasJan} estratégias ${plataformasJan.length === 1 ? `no ${plataformasJan[0]}` : "no Google e no Meta"} e chegou a ${ativasMax} em ${fmtLista(mesesNoMax)}. ${ultimo.parcial ? `Em ${ultimo.nome}, até ${fmtDia(s.periodo.fim)}, ${ativasUltimo} já rodaram.` : ""}`}
+        description={`Cada linha é uma estratégia e cada coluna um mês com veiculação; quanto mais escura a célula, maior o investimento. ${fmtLista(
+          meses.map((m) => `${m.rotulo}: ${m.estrategias.length}`),
+        )} estratégias no ar.`}
       >
         <ChartFrame
-          eyebrow="Estratégia × mês · investimento"
-          title="O que rodou em cada mês"
-          subtitle={<span className="no-print">Passe o cursor numa célula para ver investimento, métrica principal, frentes e campanhas.</span>}
+          eyebrow="Investimento por estratégia e mês"
+          title="A grade do ano"
+          subtitle={<span className="no-print">Passe o cursor numa célula para ver a métrica principal e as campanhas.</span>}
           span={3}
-          minHeight={420}
-          tone="amber"
+          minHeight={380}
         >
-          <GradeEstrategias grade={s.grade} meses={s.meses} fim={s.periodo.fim} />
+          <GradeEstrategias grade={s.grade} estrategias={s.estrategias} />
         </ChartFrame>
       </Section>
 
-      <Section index="04" eyebrow="Explore" title={<>Duas leituras do <em>mesmo investimento.</em></>}>
+      <Section index="04" eyebrow="Explore" title={<>Duas leituras do <em>mesmo ano.</em></>}>
         <PortasCards
           portas={[
             {
               href: "/midia",
               titulo: "Mídia",
-              numero: fmtCompact(t.impressoes, 2),
-              legenda: "impressões no Meta e no Google",
-              texto: "Estratégias, busca no Google, público por idade e gênero, engajamento, retenção de vídeo e os criativos que mais apareceram.",
+              numero: fmtCompact(t.impressoes, 1),
+              legenda: "impressões no Facebook e no Instagram",
+              texto: "Estratégias e o que cada uma entregou, o público por idade e gênero e os criativos que mais apareceram.",
               tom: "amber",
             },
             {
-              href: "/frentes",
-              titulo: "Frentes",
-              numero: `${s.frentes.length} frentes`,
-              legenda: `${fmtNum(t.campanhas)} campanhas`,
-              texto: `${s.frentes.map((f) => f.frente).join(" · ")}: quanto cada uma recebeu, o que entregou e com quais criativos.`,
+              href: "/campanhas",
+              titulo: "Campanhas",
+              numero: `${fmtNum(t.campanhas)} campanhas`,
+              legenda: "Always On + Curativos Especiais + Faz Bem",
+              texto: "O Always On por estratégia e as duas campanhas especiais: investimento, entrega, custos e criativos de cada uma.",
               tom: "dusk",
             },
           ]}
@@ -197,10 +150,10 @@ export default function Home() {
   );
 }
 
-function Fato({ valor, rotulo, tom = "text-text" }: { valor: string; rotulo: string; tom?: string }) {
+function Fato({ valor, rotulo }: { valor: string; rotulo: string }) {
   return (
     <Reveal className="hub-card flex flex-col justify-between gap-6 p-6 md:p-7" y={24}>
-      <span className={`display text-[clamp(2.2rem,3.6vw,3.25rem)] leading-none tracking-[-0.03em] tabular ${tom}`}>{valor}</span>
+      <span className="display text-[clamp(2.4rem,3.8vw,3.5rem)] font-black leading-none text-[var(--verde)] tabular first-letter:uppercase">{valor}</span>
       <span className="text-[14px] leading-snug text-text-2">{rotulo}</span>
     </Reveal>
   );

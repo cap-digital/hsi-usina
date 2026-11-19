@@ -3,16 +3,8 @@ import { cn } from "@/lib/utils";
 import { SplitHeading } from "./split-heading";
 import { Reveal } from "./reveal";
 
-/** `neutral` = --text (creme): 4ª cor de frente, distinta de limão, verde-água e verde. */
+/** Tom da linha ao lado do índice. */
 export type SectionTone = "default" | "amber" | "copper" | "dusk" | "neutral";
-
-const TONE_TEXT: Record<SectionTone, string> = {
-  default: "text-amber",
-  amber: "text-amber",
-  copper: "text-copper",
-  dusk: "text-dusk-2",
-  neutral: "text-text",
-};
 
 const TONE_LINE: Record<SectionTone, string> = {
   default: "bg-amber/60",
@@ -68,10 +60,10 @@ export function Section({
             {(index || eyebrow) && !nota && (
               <Reveal className={cn("flex items-center gap-4", centered && "justify-center")} y={16}>
                 {index && (
-                  <span className="font-mono text-[11px] tracking-[0.18em] text-text-3 tabular">{index}</span>
+                  <span className="text-[13px] font-black tracking-[0.12em] text-[var(--verde)] tabular">{index}</span>
                 )}
                 {index && <span className={cn("h-px w-10", TONE_LINE[tone])} />}
-                {eyebrow && <span className={cn("eyebrow", TONE_TEXT[tone])}>{eyebrow}</span>}
+                {eyebrow && <span className="selo">{eyebrow}</span>}
               </Reveal>
             )}
             {(index || eyebrow) && nota && (
@@ -81,13 +73,13 @@ export function Section({
                     <span className="font-mono text-[11px] tracking-[0.18em] text-text-3 tabular">{index}</span>
                   )}
                   {index && <span className={cn("h-px w-10", TONE_LINE[tone])} />}
-                  {eyebrow && <span className={cn("eyebrow", TONE_TEXT[tone])}>{eyebrow}</span>}
+                  {eyebrow && <span className="selo">{eyebrow}</span>}
                 </div>
-                <p className="font-mono text-[11.5px] leading-relaxed text-text-3">{nota}</p>
+                <p className="text-[12px] leading-relaxed text-text-3">{nota}</p>
               </Reveal>
             )}
             {title && (
-              <SplitHeading as="h2" type="lines" className="display display-2 text-text">
+              <SplitHeading as="h2" type="lines" className="display display-2 titulo-secao text-[var(--verde-escuro)]">
                 {title}
               </SplitHeading>
             )}

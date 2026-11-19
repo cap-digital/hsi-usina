@@ -20,19 +20,19 @@ export interface CtaProps {
 
 const VARIANT: Record<CtaVariant, { root: string; icon: string }> = {
   primary: {
-    root: "bg-amber text-ink hover:bg-[#ff5a52] shadow-[0_0_0_0_var(--amber-glow)] hover:shadow-[0_18px_50px_-18px_var(--amber-glow)]",
-    icon: "bg-ink/15 text-ink group-hover/cta:bg-ink group-hover/cta:text-amber",
+    root: "bg-[var(--verde)] text-white hover:bg-[var(--verde-escuro)] hover:shadow-[0_18px_50px_-18px_var(--amber-glow)]",
+    icon: "bg-white/20 text-white group-hover/cta:bg-white group-hover/cta:text-[var(--verde-escuro)]",
   },
   ghost: {
     root: "border border-line-strong bg-transparent text-text hover:border-text/40 hover:bg-text/5",
-    icon: "bg-text/10 text-text group-hover/cta:bg-text group-hover/cta:text-ink",
+    icon: "bg-text/10 text-text group-hover/cta:bg-[var(--verde-escuro)] group-hover/cta:text-white",
   },
   copper: {
-    root: "bg-copper text-ink hover:bg-[#f7c65e] hover:shadow-[0_18px_50px_-18px_var(--copper-glow)]",
-    icon: "bg-ink/15 text-ink group-hover/cta:bg-ink group-hover/cta:text-copper",
+    root: "bg-[var(--verde-claro)] text-[var(--verde-escuro)] hover:bg-[var(--verde)] hover:text-white",
+    icon: "bg-white/40 text-[var(--verde-escuro)] group-hover/cta:bg-white",
   },
   dusk: {
-    root: "bg-dusk-2 text-white hover:bg-[#4e97ee] hover:shadow-[0_18px_50px_-18px_var(--dusk-glow)]",
+    root: "bg-[var(--verde-escuro)] text-white hover:bg-[var(--verde)] hover:shadow-[0_18px_50px_-18px_var(--dusk-glow)]",
     icon: "bg-white/15 text-white group-hover/cta:bg-white group-hover/cta:text-dusk-2",
   },
 };

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Home from "../page";
 import Midia from "../midia/page";
-import Frentes from "../frentes/page";
+import Campanhas from "../campanhas/page";
 
-export const metadata: Metadata = { title: "Relatório · Hospital Santa Izabel" };
+export const metadata: Metadata = { title: "Hospital Santa Izabel · Relatório de Desempenho · Meta 2026" };
 
-/** Início + Mídia + Frentes numa página só; /api/pdf transforma esta página em PDF. */
+/** Início + Mídia + Campanhas numa página só; /api/pdf transforma esta página em PDF. */
 export default function Relatorio() {
   return (
     <div className="relatorio">
@@ -14,7 +14,7 @@ export default function Relatorio() {
         <Midia />
       </div>
       <div className="quebra-pagina">
-        <Frentes />
+        <Campanhas />
       </div>
     </div>
   );

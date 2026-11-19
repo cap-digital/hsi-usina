@@ -7,21 +7,21 @@ import { cn } from "@/lib/utils";
 import { useScrollState } from "@/hooks/use-scroll-state";
 import { LogoHSI } from "@/components/core/logo";
 import { TransitionLink } from "@/components/core/transition-link";
-import { fmtAtualizado } from "@/data/format";
+import { fmtDia } from "@/data/format";
 import { usePainel } from "@/data/provider";
 import { MenuOverlay } from "./menu-overlay";
 
 export const ROUTES = [
   { href: "/", label: "Início" },
   { href: "/midia", label: "Mídia" },
-  { href: "/frentes", label: "Frentes" },
+  { href: "/campanhas", label: "Campanhas" },
 ] as const;
 
 export function activeRouteIndex(pathname: string): number {
   return ROUTES.findIndex((r) => (r.href === "/" ? pathname === "/" : pathname.startsWith(r.href)));
 }
 
-function RoutePills({ pathname }: { pathname: string }) {
+function RoutePills({ pathname, sobreVerde }: { pathname: string; sobreVerde: boolean }) {
   const listRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const activeIndex = activeRouteIndex(pathname);
@@ -65,12 +65,15 @@ function RoutePills({ pathname }: { pathname: string }) {
     <nav aria-label="Seções do relatório" className="hidden md:block">
       <div
         ref={listRef}
-        className="relative flex items-center rounded-full border border-line bg-ink/50 p-1 backdrop-blur-md"
+        className={cn(
+          "relative flex items-center rounded-full border p-1 backdrop-blur-md transition-colors duration-500",
+          sobreVerde ? "border-white/40 bg-white/15" : "border-line bg-white/70",
+        )}
       >
         <span
           ref={indicatorRef}
           aria-hidden="true"
-          className="absolute left-0 top-1 h-[calc(100%-8px)] rounded-full bg-amber opacity-0"
+          className="absolute left-0 top-1 h-[calc(100%-8px)] rounded-full bg-[var(--verde-escuro)] opacity-0"
         />
         {ROUTES.map((route, i) => {
           const active = i === activeIndex;
@@ -82,7 +85,7 @@ function RoutePills({ pathname }: { pathname: string }) {
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative z-10 rounded-full px-4 py-2 text-[13px] font-medium tracking-[-0.01em] transition-colors duration-500 ease-[var(--ease-out-expo)]",
-                active ? "text-ink" : "text-text-2 hover:text-text",
+                active ? "text-white" : sobreVerde ? "text-[var(--verde-escuro)] hover:text-white" : "text-text-2 hover:text-[var(--verde-escuro)]",
               )}
             >
               {route.label}
@@ -101,6 +104,8 @@ export function Nav() {
   const { scrolled, direction, y } = useScrollState(40);
   const hidden = !menuOpen && direction === "down" && y > 320;
   const painel = usePainel();
+  // No topo do Início o nav fica sobre o bloco verde do hero: logo branco e o logo grande do hero já aparece.
+  const sobreVerde = pathname === "/" && !scrolled && !menuOpen;
 
   // Close the menu whenever the route changes (safety net; links also close it).
   useEffect(() => {
@@ -120,15 +125,15 @@ export function Nav() {
         style={{ zIndex: "var(--z-nav)" }}
       >
         <div className="container-hub flex h-[72px] items-center justify-between gap-6 md:h-20">
-          <TransitionLink href="/" aria-label="Início — Balanço de mídia Hospital Santa Izabel" className="flex shrink-0 items-center">
-            <LogoHSI className="text-[17px] md:text-[19px]" />
+          <TransitionLink href="/" aria-label="Início — Relatório de Desempenho, Hospital Santa Izabel" className="relative flex shrink-0 items-center">
+            <LogoHSI cor={sobreVerde ? "branco" : "verde"} altura={52} priority className={cn("transition-opacity duration-500", sobreVerde && "md:opacity-0")} />
           </TransitionLink>
 
-          <RoutePills pathname={pathname} />
+          <RoutePills pathname={pathname} sobreVerde={sobreVerde} />
 
           <div className="flex items-center gap-5">
-            <span className="hidden font-mono text-[11px] uppercase tracking-[0.16em] text-text-3 lg:inline tabular">
-              Atualizado {fmtAtualizado(painel.atualizadoEm)}
+            <span className={cn("hidden text-[11px] font-semibold uppercase tracking-[0.22em] lg:inline tabular", sobreVerde ? "text-[var(--verde-escuro)]" : "text-text-3")}>
+              Meta · {fmtDia(painel.periodo.inicio)} → {fmtDia(painel.periodo.fim)} 2026
             </span>
             <button
               type="button"
@@ -138,11 +143,11 @@ export function Nav() {
               data-open={menuOpen}
               className={cn(
                 "group/burger flex h-10 items-center gap-3 rounded-full border px-4 transition-[border-color,background-color] duration-500 ease-[var(--ease-out-expo)]",
-                menuOpen ? "border-text/30 bg-text/5" : "border-line hover:border-line-strong hover:bg-text/5",
+                menuOpen ? "border-text/30 bg-text/5" : sobreVerde ? "border-[var(--verde-escuro)]/40 hover:bg-white/15" : "border-line bg-white/70 hover:border-line-strong",
               )}
             >
               {/* Both labels share one grid cell so the button is as wide as the longest word ("Fechar"). */}
-              <span className="relative grid h-[11px] overflow-hidden font-mono text-[11px] uppercase leading-[11px] tracking-[0.16em] text-text">
+              <span className={cn("relative grid h-[11px] overflow-hidden text-[11px] font-semibold uppercase leading-[11px] tracking-[0.2em]", sobreVerde ? "text-[var(--verde-escuro)]" : "text-text")}>
                 <span
                   className={cn(
                     "col-start-1 row-start-1 block transition-transform duration-500 ease-[var(--ease-out-expo)]",
@@ -161,7 +166,7 @@ export function Nav() {
                   Fechar
                 </span>
               </span>
-              <span className="relative block h-3 w-5 text-text" aria-hidden="true">
+              <span className={cn("relative block h-3 w-5", sobreVerde ? "text-[var(--verde-escuro)]" : "text-text")} aria-hidden="true">
                 <span className="burger-line" />
                 <span className="burger-line" />
               </span>

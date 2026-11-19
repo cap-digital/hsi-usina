@@ -66,7 +66,7 @@ export function ChartFrame({
       <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-6 pt-6 md:px-7 md:pt-7">
         <div className="min-w-0 flex-1">
           {eyebrow && <span className={cn("eyebrow", TONE_EYEBROW[tone])}>{eyebrow}</span>}
-          <h3 className={cn("display text-[clamp(1.2rem,1.5vw,1.5rem)] leading-tight tracking-[-0.02em] text-text", eyebrow && "mt-2")}>
+          <h3 className={cn("display text-[clamp(1.2rem,1.5vw,1.5rem)] leading-tight tracking-[-0.01em] text-[var(--verde-escuro)]", eyebrow && "mt-2")}>
             {title}
           </h3>
           {subtitle && <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-text-2">{subtitle}</p>}

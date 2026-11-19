@@ -1,637 +1,365 @@
 #!/usr/bin/env python3
 """
-Gera src/data/snapshot.json (relatório agregado jan→out 2026) a partir do JSON
-da edge function do Supabase (HospSantaIzabel2026).
+Gera src/data/snapshot.json (Relatório de Desempenho · Meta 2026 do Hospital Santa Izabel)
+a partir dos JSON crus de data/meta-raw/ (baixados por scripts/pull-meta.py) e copia os
+criativos escolhidos de data/criativos-raw/ para public/criativos/.
 
 Uso:
-  1) baixar os dados:
-     curl -sS -L -X POST 'https://cqrpbiepyeypbkizwacu.supabase.co/functions/v1/HospSantaIzabel2026' \
-       -H 'Authorization: Bearer <chave>' -H 'apikey: <chave>' \
-       -H 'Content-Type: application/json' --data '{"name":"Functions"}' -o data/hsi-dados.json
-  2) python3 scripts/build-snapshot.py data/hsi-dados.json src/data/snapshot.json --curativos data/curativos-google.csv --ate 2026-10-31 --imagens
-     (--ate AAAA-MM-DD: corte de data — descarta linhas posteriores no consolidado, googlefazbemage/gender e CSV da Curativos)
-     (--curativos: CSV à parte da campanha Curativos — PI 355, Google Pesquisa, 02/12/2025 → 25/02/2026)
-     (--imagens baixa as miniaturas dos criativos para public/criativos/; as URLs do
-      fbcdn expiram em dias, então o relatório usa as cópias locais)
+  python3 scripts/pull-meta.py          # baixa data/meta-raw/ e data/criativos-raw/
+  python3 scripts/build-snapshot.py     # gera src/data/snapshot.json + public/criativos/
 
-Regras (nada estimado além do indicado):
-  - Pipeline do dashboard em produção (descarta Estratégia em branco e uploads errados), com uma
-    diferença: aqui o investimento de cada grupo de contrato é IGUAL ao contratado no ANO TODO, nos dois
-    sentidos (reduz se passou, aumenta se ficou abaixo). Só o investimento muda; as demais métricas ficam como entregues (ver contrato / aplicar_regras). "Investimento" já é o valor ao cliente (spend ÷ margem): nunca usar spend.
-  - Sem alcance: a fonte só tem alcance por dia × anúncio × idade × gênero, não único.
-  - Colunas "Gênero" e "Idade" vêm TROCADAS na planilha; aqui são corrigidas.
-  - "#DIV/0!" e vazios em Investimento contam 0. Linhas sem data são descartadas.
-  - YouTube: a fonte traz a TAXA de cada quartil por dia; contagem = taxa × impressões.
-  - "Pesquisa" e "Search" (Google) viram a mesma estratégia: "Pesquisa".
-  - Palavras-chave (googlekeywords): só termos não vazios, de 01/01 do ano ao corte; frente pelo nome da campanha
-    ("FAZ BEM" → Faz Bem; "INSTITUCIONAL"/"AON" → Institucional AON). Sem custo por palavra-chave na fonte.
+Regras:
+  - Investimento = spend exatamente como vem da API (valor do Gerenciador). Sem margem, sem ajuste.
+  - Alcance total vem de conta_total.json (único no período); nunca é somado entre meses.
+    O alcance de uma estratégia com várias campanhas é a soma do alcance de cada campanha
+    (marcado com alcanceSomado=true; a interface diz isso).
+  - Engajamento = action post_engagement. Cliques no link = inline_link_clicks.
+  - Período 01/01 → 31/10/2026; só entram os meses com veiculação.
+  - Público: idade/gênero desconhecidos ficam de fora; % sobre o informado.
 """
 
-import csv
+import hashlib
 import json
 import os
+import shutil
+import subprocess
 import sys
-import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RAW = os.path.join(RAIZ, "data", "meta-raw")
+IMG_RAW = os.path.join(RAIZ, "data", "criativos-raw")
+IMG_PUB = os.path.join(RAIZ, "public", "criativos")
+SAIDA = os.path.join(RAIZ, "src", "data", "snapshot.json")
+
+PERIODO = {"inicio": "2026-01-01", "fim": "2026-10-31"}
 MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 MESES_LONGOS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 FAIXAS = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"]
-ESTRATEGIA = {"Search": "Pesquisa", "Pesquisa": "Pesquisa", "Display": "Display", "In-Stream": "YouTube In-Stream",
-              "Alcance": "Alcance", "Engajamento": "Engajamento", "Tráfego": "Tráfego", "Posts de Oportunidade": "Posts de oportunidade"}
+CRIATIVOS_POR_ESTRATEGIA = 8
+# Anúncios cuja imagem disponível não mostra a peça (ex.: quadro inicial do vídeo todo em cor sólida).
+EXCLUIR_CRIATIVOS = {"120242263793020251": "miniatura do vídeo é só um fundo verde, sem a peça"}
+
+# Ordem fixa das estratégias e o grupo de cada uma.
+ESTRATEGIAS = [
+    ("Alcance", "Always On"),
+    ("Engajamento", "Always On"),
+    ("Tráfego", "Always On"),
+    ("Posts de oportunidade", "Always On"),
+    ("Curativos Especiais", "Campanha especial"),
+    ("Faz Bem", "Campanha especial"),
+]
+GRUPO = dict(ESTRATEGIAS)
+
+# Métrica principal de cada estratégia: impressões + CPM, engajamentos + custo por engajamento, cliques no link + CPC.
+PRINCIPAL = {
+    "Alcance": "impressoes",
+    "Posts de oportunidade": "impressoes",
+    "Curativos Especiais": "impressoes",
+    "Engajamento": "engajamento",
+    "Faz Bem": "engajamento",
+    "Tráfego": "cliquesLink",
+}
+
+
+def estrategia_da_campanha(nome):
+    n = nome.lower()
+    if "curativos" in n:
+        return "Curativos Especiais"
+    if "faz bem" in n:
+        return "Faz Bem"
+    if "oportunidade" in n:
+        return "Posts de oportunidade"
+    if "tráfego" in n or "trafego" in n:
+        return "Tráfego"
+    if "engajamento" in n or "engj" in n:
+        return "Engajamento"
+    if "alcance" in n:
+        return "Alcance"
+    return None
+
+
+def nome_curto(nome, estrategia):
+    """'HSI | Always On 2026 | Janeiro | Alcance' → 'Always On · Janeiro · Alcance'."""
+    if estrategia == "Curativos Especiais":
+        return "Curativos Especiais"
+    if estrategia == "Faz Bem":
+        return "Faz Bem"
+    n = nome.lower()
+    mes = next((MESES_LONGOS[i] for i in range(12) if MESES_LONGOS[i] in n), None)
+    if estrategia == "Posts de oportunidade":
+        return "Posts de oportunidade · Outubro" if mes == "outubro" else "Posts de oportunidade · jan a mar"
+    rot = f"Always On · {mes.capitalize() if mes else ''} · {estrategia}"
+    if "cortes" in n:
+        rot += " (Cortes)"
+    return rot
 
 
 def num(x):
     try:
-        v = float(x)
-        return v if v == v else 0.0  # NaN
+        return float(x)
     except (TypeError, ValueError):
         return 0.0
 
 
-def plataforma(p):
-    return p.replace('"', "").replace("()", "").strip()
+def acao(row, tipo):
+    for a in row.get("actions") or []:
+        if a.get("action_type") == tipo:
+            return num(a.get("value"))
+    return 0.0
 
 
-def metricas():
-    return {"investimento": 0.0, "impressoes": 0.0, "cliques": 0.0, "views": 0.0, "engajamento": 0.0}
+def ld(nome):
+    with open(os.path.join(RAW, nome), encoding="utf-8") as f:
+        return json.load(f)
 
 
-def soma(m, r):
-    m["investimento"] += num(r.get("Investimento"))
-    m["impressoes"] += num(r.get("Impressões"))
-    m["cliques"] += num(r.get("Cliques"))
-    m["views"] += num(r.get("Visualizações"))
-    m["engajamento"] += num(r.get("Engajamento"))
+def metricas(r):
+    return {
+        "investimento": num(r.get("spend")),
+        "impressoes": num(r.get("impressions")),
+        "alcance": num(r.get("reach")),
+        "cliques": num(r.get("clicks")),
+        "cliquesLink": num(r.get("inline_link_clicks")),
+        "engajamento": acao(r, "post_engagement"),
+    }
+
+
+def zero():
+    return {"investimento": 0.0, "impressoes": 0.0, "alcance": 0.0, "cliques": 0.0, "cliquesLink": 0.0, "engajamento": 0.0}
+
+
+def soma(a, b):
+    for k in a:
+        a[k] += b.get(k, 0.0)
+    return a
 
 
 def fecha(m, extra=None):
-    """Arredonda e acrescenta CTR, CPM e CPC."""
-    out = {k: round(v, 2) if k == "investimento" else round(v) for k, v in m.items()}
-    imp, cli, inv = m["impressoes"], m["cliques"], m["investimento"]
-    out["ctr"] = round(cli / imp, 5) if imp else 0
+    """Arredonda e calcula CPM, CTR (cliques ÷ impressões), CPC (por clique no link), custo por engajamento, frequência."""
+    inv, imp, alc = m["investimento"], m["impressoes"], m["alcance"]
+    out = {k: (round(v, 2) if k == "investimento" else round(v)) for k, v in m.items()}
     out["cpm"] = round(inv / imp * 1000, 2) if imp else 0
-    out["cpc"] = round(inv / cli, 2) if cli else 0
+    out["ctr"] = round(m["cliques"] / imp, 6) if imp else 0
+    out["ctrLink"] = round(m["cliquesLink"] / imp, 6) if imp else 0
+    out["cpc"] = round(inv / m["cliquesLink"], 2) if m["cliquesLink"] else 0
+    out["custoEngajamento"] = round(inv / m["engajamento"], 4) if m["engajamento"] else 0
+    out["frequencia"] = round(imp / alc, 2) if alc else 0
     if extra:
         out.update(extra)
     return out
 
 
-# ------------------------------------------------------------------ regras do dashboard HSI 2026
-# Mesmas regras do dashboard em produção (hospsantaizabel.capdigital.company), para os
-# números do relatório baterem com o que o cliente já viu.
-
-# (2) Uploads errados: (trecho do nome da campanha, criativo ou None = todos, início, fim)
-UPLOADS_ERRADOS = [
-    ("[SANTA ISABEL] [DISPLAY] [FAZ BEM - AON]", None, "2026-08-04", "2026-08-10"),
-    ("[SANTA ISABEL] [YOUTUBE - IN STREAM] [FAZ BEM - AON]", "[AD] 01 - 01.06 - V2", "2026-08-04", "2026-08-11"),
-    # Meta Tráfego não rodou em outubro: 2 linhas vazias (0 impressões, #DIV/0!) da automação de coleta.
-    ("[PI 437] [HOSPITAL SANTA IZABEL] [TRÁFEGO]", None, "2026-10-01", "2026-10-31"),
-]
-
-# (4) Investimento contratado (bruto). NESTE RELATÓRIO vale para o ANO TODO: o investimento de cada grupo é
-#     IGUAL ao contratado, nos dois sentidos (linhas × contratado/realizado). Só o investimento é ajustado;
-#     impressões, cliques, views e engajamento ficam como entregues. Grupo sem contrato → investimento 0.
-#     Grupo com contrato e sem entrega (sem linhas ou realizado 0) não tem onde distribuir: é listado no terminal.
-MESES_ANO = [f"2026-{m:02d}" for m in range(1, 11)]
-AON = {  # Institucional AON, por mês (jan → out)
-    ("Google", "Search"):               [3000] * 10,
-    ("Meta", "Alcance"):                [0, 0, 0, 0, 4750, 4750, 4250, 4250, 4250, 0],
-    ("Meta", "Engajamento"):            [0, 0, 0, 0, 5500, 5500, 2000, 2000, 2000, 0],
-    ("Meta", "Tráfego"):                [0, 0, 0, 0, 0, 0, 3500, 3500, 3500, 0],
-    ("Meta", "Posts de Oportunidade"):  [0, 0, 0, 0, 0, 0, 500, 500, 500, 0],
-}
-CHECKUP = {("2026-06", "Meta", "Alcance"): 1000}
-CURATIVOS = 6000  # PI 355, Google Pesquisa, 02/12/2025 → 25/02/2026: um grupo único para a campanha inteira
-_PACOTE = {("Google", "Display"): 1500, ("Google", "In-Stream"): 1500, ("Meta", "Alcance"): 1500, ("Meta", "Posts de Oportunidade"): 500}
-FAZ_BEM = [  # (período, início, fim, contratado por (plataforma, estratégia))
-    ("P1", "2025-12-23", "2026-02-23", {("Google", "Pesquisa"): 2000, ("Google", "Display"): 5000}),
-    ("P2", "2026-02-24", "2026-03-23", {("Google", "Pesquisa"): 1000, ("Google", "Display"): 2500}),
-    ("P3", "2026-05-11", "2026-05-31", {("Google", "Display"): 1500, ("Meta", "Alcance"): 3500}),
-    ("P4", "2026-06-01", "2026-06-30", _PACOTE),
-    ("P5", "2026-07-01", "2026-07-31", _PACOTE),
-    ("P6", "2026-08-01", "2026-08-31", _PACOTE),
-    ("P7", "2026-09-01", "2026-09-30", _PACOTE),
-    ("P8", "2026-10-01", "2026-10-31", _PACOTE),
-]
+def rotulo_mes(mes):
+    i = int(mes[5:7]) - 1
+    return MESES[i], MESES_LONGOS[i]
 
 
-def contratado_ano():
-    """Soma das tabelas de contrato (AON + Checkup + Faz Bem, todos os períodos): o contratado do ano."""
-    aon = sum(sum(v) for v in AON.values())
-    checkup = sum(CHECKUP.values())
-    faz_bem = sum(sum(pac.values()) for _, _, _, pac in FAZ_BEM)
-    return aon + checkup + faz_bem + CURATIVOS
+# ------------------------------------------------------------------ criativos
+
+def md5(caminho):
+    h = hashlib.md5()
+    with open(caminho, "rb") as f:
+        h.update(f.read())
+    return h.hexdigest()
 
 
-def grupos_contratados():
-    """Todos os grupos com contrato > 0, nas mesmas chaves de contrato(r)."""
-    g = {}
-    for (plat, estr), valores in AON.items():
-        for mes, v in zip(MESES_ANO, valores):
-            if v:
-                g[("AON", mes, plat, estr)] = v
-    for (mes, plat, estr), v in CHECKUP.items():
-        g[("Checkup", mes, plat, estr)] = v
-    for per, _, _, pac in FAZ_BEM:
-        for (plat, estr), v in pac.items():
-            g[("Faz Bem", per, plat, estr)] = v
-    g[("Curativos",)] = CURATIVOS
-    return g
+def copia_reduzida(origem, destino, largura=720):
+    """Copia o JPEG reduzindo para no máximo `largura` px (sips, macOS); sem sips, copia como está."""
+    if shutil.which("sips"):
+        r = subprocess.run(["sips", "--resampleWidth", str(largura), "-s", "format", "jpeg", "-s", "formatOptions", "82", origem, "--out", destino],
+                           capture_output=True)
+        w = subprocess.run(["sips", "-g", "pixelWidth", origem], capture_output=True, text=True).stdout
+        larg = int(w.strip().split()[-1]) if w.strip() else 0
+        if r.returncode == 0 and larg and larg < largura:
+            shutil.copyfile(origem, destino)  # não amplia
+        if r.returncode == 0:
+            return
+    shutil.copyfile(origem, destino)
 
 
-def contrato(r):
-    """(chave do grupo, valor contratado) da linha."""
-    dia, plat, estr, frente = r["Data"][:10], plataforma(r["Plataforma"]), r["Estratégia "].strip(), r.get("Campanha")
-    if frente == "Institucional AON":
-        mes = dia[:7]
-        valor = AON.get((plat, estr), [0] * 10)[MESES_ANO.index(mes)] if mes in MESES_ANO else 0
-        return ("AON", mes, plat, estr), valor
-    if frente == "Curativos":
-        return ("Curativos",), CURATIVOS
-    if frente == "Checkup Torcedor":
-        return ("Checkup", dia[:7], plat, estr), CHECKUP.get((dia[:7], plat, estr), 0)
-    if frente == "Faz Bem":
-        for per, ini, fim, pac in FAZ_BEM:
-            if ini <= dia <= fim:
-                return ("Faz Bem", per, plat, estr), pac.get((plat, estr), 0)
-        return ("Faz Bem", "fora de período", plat, estr), 0
-    return ("Outros", dia[:7], plat, estr), 0
-
-
-def br_num(x):
-    """'1.234,56' / '25,125' → float (decimais com vírgula)."""
-    x = (x or "").strip().replace(".", "").replace(",", ".")
-    return num(x)
-
-
-def ler_curativos(caminho):
-    """CSV da campanha Curativos (Google) → linhas no formato do consolidado. Investimento = coluna Investimento (nunca spend)."""
-    linhas = []
-    with open(caminho, encoding="utf-8-sig", newline="") as fh:
-        for r in csv.DictReader(fh):
-            d, m, a = (r.get("date") or "").strip().split("/")
-            linhas.append({
-                "Data": f"{a}-{m}-{d}T03:00:00.000Z",  # mesmo formato do consolidado (meia-noite em Salvador)
-                "Plataforma": "Google",
-                "Campanha": "Curativos",
-                "Estratégia ": "Pesquisa",
-                "Mês": MESES_LONGOS[int(m) - 1].capitalize(),
-                "Nome Campanha": r.get("campaign", ""),
-                "Grupo Anúncio": r.get("ad_group_name", ""),
-                "Nome Criativo": r.get("ad_name", ""),
-                "Impressões": br_num(r.get("impressions")),
-                "Cliques": br_num(r.get("clicks")),
-                "Investimento": br_num(r.get("Investimento")),
-            })
-    return linhas
-
-
-def upload_errado(campanha, criativo, dia):
-    for trecho, cr, ini, fim in UPLOADS_ERRADOS:
-        if trecho in (campanha or "") and ini <= dia <= fim and (cr is None or criativo is None or criativo == cr):
-            return True
-    return False
-
-
-def aplicar_regras(raw, avisos):
-    """(1) descarta Estratégia em branco → (2) uploads errados → (3) Display PI 438 → (4) investimento = contratado."""
-    rows = []
-    descartadas = 0
-    for r in raw["consolidado"]:
-        if not r.get("Data") or not (r.get("Estratégia ") or "").strip():
-            descartadas += 1
-            continue
-        if upload_errado(r.get("Nome Campanha"), r.get("Nome Criativo"), r["Data"][:10]):
-            descartadas += 1
-            continue
-        rows.append(r)
-    for tabela in ("googlefazbemage", "googlefazbemgender"):
-        # Sem criativo nesses arrays: a regra cai para campanha + data (só aquele criativo rodou na janela).
-        raw[tabela] = [r for r in raw.get(tabela, [])
-                       if (r.get("Estratégia ") or "").strip() and not upload_errado(r.get("campaign"), None, r["date"][:10])]
-    avisos.append(f"{descartadas} linhas descartadas (sem data, Estratégia em branco ou uploads errados da coleta).")
-
-    # (3) Redistribuição do Display PI 438 em setembro: move valores entre dias DENTRO do mês,
-    #     sem alterar totais mensais — não afeta nenhum número deste relatório agregado.
-
-    # (4) Investimento igual ao contratado em todos os grupos, ano todo: cada grupo é escalado por contratado/realizado
-    #     (reduz se passou, aumenta se ficou abaixo). Grupo sem contrato → 0.
-    grupos = defaultdict(list)
-    meta_grupo = {}
-    for r in rows:
-        k, valor = contrato(r)
-        grupos[k].append(r)
-        meta_grupo[k] = valor
-    ajuste = 0.0  # contratado − realizado (positivo = aumentou)
-    sem_entrega = []
-    for k, linhas in grupos.items():
-        realizado = sum(num(r.get("Investimento")) for r in linhas)
-        contratado = meta_grupo[k]
-        if contratado and not realizado:
-            sem_entrega.append((k, contratado))
-            continue
-        fator = contratado / realizado if realizado else 0
-        for r in linhas:
-            r["Investimento"] = num(r.get("Investimento")) * fator
-        ajuste += contratado - realizado
-    sem_entrega += [(k, v) for k, v in grupos_contratados().items() if k not in grupos]
-    if sem_entrega:
-        print(f"ATENÇÃO: {len(sem_entrega)} grupo(s) com contrato e sem entrega para distribuir (ficam com R$ 0):")
-        for k, v in sorted(sem_entrega):
-            print(f"  - {' · '.join(k)}: contratado R$ {v:,.2f}")
-        avisos.append(f"{len(sem_entrega)} grupo(s) com contrato e sem entrega: " + "; ".join(" · ".join(k) for k, _ in sorted(sem_entrega)) + ".")
-    brl = f"{abs(ajuste):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    sentido = "acima" if ajuste >= 0 else "abaixo"
-    avisos.append(f"Investimento igual ao contratado em todos os grupos (ano todo): R$ {brl} {sentido} do realizado (não indicado na interface).")
-    return rows, ajuste
-
-
-def cortar(linhas, campo, ate):
-    """Descarta linhas com data posterior a `ate` (AAAA-MM-DD). Linhas sem data seguem (aplicar_regras as descarta)."""
-    if not ate:
-        return linhas, 0
-    ficam = [r for r in linhas if not r.get(campo) or r[campo][:10] <= ate]
-    return ficam, len(linhas) - len(ficam)
-
-
-def frente_keyword(campanha):
-    c = (campanha or "").upper()
-    if "FAZ BEM" in c:
-        return "Faz Bem"
-    if "INSTITUCIONAL" in c or "AON" in c:
-        return "Institucional AON"
-    return None
-
-
-def palavras_chave(linhas, inicio, fim, cliques_pesquisa):
-    """googlekeywords → {porFrente: {frente: [todos os termos com clique, por cliques]}, totais: {frente: {...}}}.
-    A interface reordena por cliques, impressões ou CTR e corta no top 10 / 15.
-    Conferência (cliques das keywords × cliques de Pesquisa do consolidado, por frente): impressa no terminal e
-    gravada em totais (cliquesPesquisa, completa) — a interface esconde os totais da frente incompleta."""
-    acc = defaultdict(lambda: {"impressoes": 0.0, "cliques": 0.0})
-    vazias, fora, outras = 0, 0, defaultdict(int)
-    for r in linhas:
-        termo = " ".join((r.get("keyword_text") or "").lower().split())
-        if not termo:
-            vazias += 1
-            continue
-        dia = (r.get("date") or "")[:10]
-        if not (inicio <= dia <= fim):
-            fora += 1
-            continue
-        frente = frente_keyword(r.get("campaign"))
-        if not frente:
-            outras[r.get("campaign") or "(sem campanha)"] += 1
-            continue
-        x = acc[(frente, termo)]
-        x["impressoes"] += num(r.get("impressions"))
-        x["cliques"] += num(r.get("clicks"))
-    print(f"palavras-chave: {len(linhas)} linhas · {vazias} sem termo (Display) · {fora} fora de {inicio} → {fim}")
-    if outras:
-        print("palavras-chave: campanhas sem frente reconhecida (ignoradas):")
-        for c, n in sorted(outras.items()):
-            print(f"  - {c}: {n} linhas")
-
-    por_frente, totais = {}, {}
-    for frente in ("Institucional AON", "Faz Bem"):
-        termos = [(t, m) for (f, t), m in acc.items() if f == frente]
-        termos.sort(key=lambda tm: (-tm[1]["cliques"], -tm[1]["impressoes"], tm[0]))
-        com_clique = [(t, m) for t, m in termos if round(m["cliques"]) > 0]  # termo com 0 clique não entra no ranking
-        por_frente[frente] = [{"termo": t, "impressoes": round(m["impressoes"]), "cliques": round(m["cliques"]),
-                               "ctr": round(m["cliques"] / m["impressoes"], 5) if m["impressoes"] else 0} for t, m in com_clique]
-        cliques = round(sum(m["cliques"] for _, m in termos))
-        cons = round(cliques_pesquisa.get(frente, 0))
-        # Resumo só com termos de pelo menos 1 clique (os mesmos do ranking); cliques iguais aos de todos os termos.
-        totais[frente] = {"termos": len(com_clique), "cliques": cliques,
-                          "impressoes": round(sum(m["impressoes"] for _, m in com_clique)),
-                          "cliquesPesquisa": cons,
-                          # Fonte completa: as keywords cobrem os cliques de Pesquisa da frente (tolerância de 1%).
-                          "completa": bool(cons) and cliques >= cons * 0.99}
-
-    print("conferência · cliques das palavras-chave × cliques de Pesquisa no consolidado (mesmo período):")
-    for frente, tt in totais.items():
-        cons = tt["cliquesPesquisa"]
-        dif = tt["cliques"] - cons
-        pct = f"{dif / cons * 100:+.1f}%" if cons else "—"
-        print(f"  - {frente}: keywords {tt['cliques']:,} × consolidado {cons:,} → diferença {dif:+,} ({pct})".replace(",", "."))
-    return {"porFrente": por_frente, "totais": totais}
-
-
-def main(src, dst, baixar_imagens, curativos=None, ate=None):
-    raw = json.load(open(src, encoding="utf-8"))
+def main():
     avisos = []
-    if ate:
-        raw["consolidado"], n = cortar(raw.get("consolidado", []), "Data", ate)
-        for tabela in ("googlefazbemage", "googlefazbemgender"):
-            raw[tabela], k = cortar(raw.get(tabela, []), "date", ate)
-            n += k
-        print(f"corte em {ate}: {n} linhas posteriores descartadas (consolidado + googlefazbemage/gender)")
-    if curativos:
-        extra, k = cortar(ler_curativos(curativos), "Data", ate)
-        if k:
-            print(f"corte em {ate}: {k} linhas posteriores descartadas do CSV da Curativos")
-        raw["consolidado"] = raw.get("consolidado", []) + extra
-        avisos.append(f"Curativos: {len(extra)} linhas do CSV {os.path.basename(curativos)} (fora da função do Supabase).")
-    rows, ajuste = aplicar_regras(raw, avisos)
-    print(f"regras aplicadas · investimento igual ao contratado em todos os grupos: R$ {abs(ajuste):,.2f} {'acima' if ajuste >= 0 else 'abaixo'} do realizado")
-    for r in rows:
-        r["_plat"] = plataforma(r["Plataforma"])
-        r["_dia"] = r["Data"][:10]  # T03:00Z = meia-noite em Salvador
-        r["_mes"] = r["_dia"][:7]
-        r["_estr"] = ESTRATEGIA.get(r.get("Estratégia ", "").strip(), r.get("Estratégia ", "").strip())
-        r["_frente"] = r.get("Campanha") or "Outros"
-        # Colunas trocadas na planilha: "Gênero" traz a faixa etária e "Idade" o gênero.
-        r["_idade"] = (r.get("Gênero") or "").strip()
-        r["_genero"] = (r.get("Idade") or "").strip().lower()
+    total = ld("conta_total.json")[0]
+    conta_mensal = ld("conta_mensal.json")
+    camp_total = ld("campanhas_total.json")
+    camp_mensal = ld("campanhas_mensal.json")
+    camp_info = {c["id"]: c for c in ld("campanhas_info.json")}
+    publico_raw = ld("publico_idade_genero.json")
+    anuncios = ld("anuncios.json")
+    criativos_raw = {c["ad_id"]: c for c in ld("criativos.json")}
 
-    div0 = [r for r in rows if r.get("Investimento") == "#DIV/0!"]
-    if div0:
-        avisos.append(f"{len(div0)} linhas com #DIV/0! em Investimento contadas como R$ 0 "
-                      f"({round(sum(num(r.get('Impressões')) for r in div0)):,} impressões nelas).".replace(",", "."))
-    avisos.append("Alcance fora do relatório: a fonte não traz alcance único.")
-    avisos.append("Colunas Gênero/Idade da planilha vêm trocadas; corrigido no snapshot.")
+    # ---------------------------------------------------- campanhas
+    campanhas = []
+    estr_de = {}
+    for c in camp_total:
+        m = metricas(c)
+        if m["investimento"] == 0 and m["impressoes"] == 0:
+            continue
+        e = estrategia_da_campanha(c["campaign_name"])
+        if not e:
+            avisos.append(f"Campanha sem estratégia: {c['campaign_name']}")
+            continue
+        estr_de[c["campaign_id"]] = e
+        info = camp_info.get(c["campaign_id"], {})
+        inicio = (info.get("start_time") or "")[:10]
+        meses_veic = sorted(r["date_start"][:7] for r in camp_mensal
+                            if r["campaign_id"] == c["campaign_id"] and (num(r.get("spend")) > 0 or num(r.get("impressions")) > 0))
+        campanhas.append(fecha(m, {
+            "id": c["campaign_id"],
+            "nome": c["campaign_name"],
+            "nomeCurto": nome_curto(c["campaign_name"], e),
+            "estrategia": e,
+            "grupo": GRUPO[e],
+            "objetivo": c.get("objective", ""),
+            "inicioConfig": inicio,
+            "fimConfig": (info.get("stop_time") or "")[:10],
+            "meses": meses_veic,
+            "comecouAntes": bool(inicio and inicio < PERIODO["inicio"]),
+        }))
+    campanhas.sort(key=lambda c: -c["investimento"])
 
-    dias = sorted(r["_dia"] for r in rows)
-    fim = dias[-1]
-    ano = fim[:4]
-    # O período do relatório é o ano corrente; meses do ano anterior (Curativos, dez/25) entram nos números, marcados.
-    inicio = min(d for d in dias if d[:4] == ano)
+    # ---------------------------------------------------- totais
+    t = metricas(total)
+    meses_ok = sorted(r["date_start"][:7] for r in conta_mensal if num(r.get("spend")) > 0 or num(r.get("impressions")) > 0)
+    totais = fecha(t, {"campanhas": len(campanhas), "anuncios": len([a for a in anuncios if num(a.get("impressions")) > 0]),
+                       "meses": len(meses_ok)})
+    soma_camp = round(sum(c["investimento"] for c in campanhas), 2)
+    if abs(soma_camp - totais["investimento"]) > 0.05:
+        avisos.append(f"Soma das campanhas ({soma_camp}) ≠ total da conta ({totais['investimento']})")
 
-    # ---------------------------------------------------------------- totais
-    tot = metricas()
-    por_plat = defaultdict(metricas)
-    plat_dias = defaultdict(list)
-    plat_camp = defaultdict(set)
-    for r in rows:
-        soma(tot, r)
-        soma(por_plat[r["_plat"]], r)
-        plat_dias[r["_plat"]].append(r["_dia"])
-        plat_camp[r["_plat"]].add(r["Nome Campanha"])
-    campanhas = {r["Nome Campanha"] for r in rows}
+    # ---------------------------------------------------- grade estratégia × mês (+ estratégias ativas por mês)
+    celulas = defaultdict(lambda: {"m": zero(), "campanhas": set()})
+    for r in camp_mensal:
+        e = estr_de.get(r["campaign_id"])
+        if not e:
+            continue
+        m = metricas(r)
+        if m["investimento"] == 0 and m["impressoes"] == 0:
+            continue
+        k = (e, r["date_start"][:7])
+        soma(celulas[k]["m"], m)
+        celulas[k]["campanhas"].add(nome_curto(r["campaign_name"], e))
 
-    plataformas = [
-        fecha(por_plat[p], {"plataforma": p, "inicio": min(plat_dias[p]), "fim": max(plat_dias[p]), "campanhas": len(plat_camp[p])})
-        for p in sorted(por_plat, key=lambda p: -por_plat[p]["investimento"])
-    ]
-
-    # ---------------------------------------------------------------- meses
-    meses_map = defaultdict(lambda: defaultdict(metricas))
-    for r in rows:
-        soma(meses_map[r["_mes"]][r["_plat"]], r)
+    # ---------------------------------------------------- meses (só os com veiculação)
     meses = []
-    for mes in sorted(meses_map):
-        m_idx = int(mes[5:7]) - 1
-        anterior = mes[:4] < ano
-        item = {"mes": mes,
-                "rotulo": f"{MESES[m_idx]}/{mes[2:4]}" if anterior else MESES[m_idx],
-                "nome": f"{MESES_LONGOS[m_idx]} de {mes[:4]}" if anterior else MESES_LONGOS[m_idx],
-                "parcial": mes == fim[:7] and fim[8:] < "28",
-                "anoAnterior": anterior}
-        total_mes = metricas()
-        for p in ("Meta", "Google"):
-            m = meses_map[mes].get(p, metricas())
-            item[p.lower()] = fecha(m)
-            for k in total_mes:
-                total_mes[k] += m[k]
-        item["total"] = fecha(total_mes)
-        meses.append(item)
+    for r in sorted(conta_mensal, key=lambda r: r["date_start"]):
+        mes = r["date_start"][:7]
+        if mes not in meses_ok:
+            continue
+        rot, nome = rotulo_mes(mes)
+        ativas = sorted({e for (e, mm) in celulas if mm == mes}, key=[x for x, _ in ESTRATEGIAS].index)
+        meses.append(fecha(metricas(r), {"mes": mes, "rotulo": rot, "nome": nome, "estrategias": ativas}))
 
-    # ---------------------------------------------------------------- frentes e estratégias
-    fr = defaultdict(metricas)
-    fr_plat = defaultdict(lambda: defaultdict(metricas))
-    fr_estr = defaultdict(lambda: defaultdict(metricas))
-    fr_dias = defaultdict(list)
-    fr_camp = defaultdict(set)
-    es = defaultdict(metricas)
-    es_frentes = defaultdict(set)
-    for r in rows:
-        f = r["_frente"]
-        soma(fr[f], r)
-        soma(fr_plat[f][r["_plat"]], r)
-        soma(fr_estr[f][(r["_plat"], r["_estr"])], r)
-        fr_dias[f].append(r["_dia"])
-        fr_camp[f].add(r["Nome Campanha"])
-        soma(es[(r["_plat"], r["_estr"])], r)
-        es_frentes[(r["_plat"], r["_estr"])].add(f)
+    linhas = [e for e, _ in ESTRATEGIAS if any(k[0] == e for k in celulas)]
+    grade = {
+        "meses": meses_ok,
+        "linhas": linhas,
+        "celulas": [fecha(v["m"], {"estrategia": e, "mes": mes, "campanhas": sorted(v["campanhas"])})
+                    for (e, mes), v in sorted(celulas.items(), key=lambda kv: (linhas.index(kv[0][0]), kv[0][1]))],
+    }
 
-    frentes = []
-    for f in sorted(fr, key=lambda f: -fr[f]["investimento"]):
-        frentes.append(fecha(fr[f], {
-            "frente": f,
-            "inicio": min(fr_dias[f]),
-            "fim": max(fr_dias[f]),
-            "campanhas": len(fr_camp[f]),
-            "plataformas": {p: fecha(m) for p, m in fr_plat[f].items()},
-            "estrategias": [fecha(m, {"plataforma": k[0], "estrategia": k[1]})
-                            for k, m in sorted(fr_estr[f].items(), key=lambda kv: -kv[1]["investimento"])],
+    # ---------------------------------------------------- estratégias
+    estrategias = []
+    for e, grupo in ESTRATEGIAS:
+        cs = [c for c in campanhas if c["estrategia"] == e]
+        if not cs:
+            continue
+        m = zero()
+        for c in camp_total:
+            if estr_de.get(c["campaign_id"]) == e:
+                soma(m, metricas(c))
+        estrategias.append(fecha(m, {
+            "estrategia": e,
+            "grupo": grupo,
+            "principal": PRINCIPAL[e],
+            "campanhas": len(cs),
+            "alcanceSomado": len(cs) > 1,
+            "meses": sorted({mm for c in cs for mm in c["meses"]}),
+            "comecouAntes": any(c["comecouAntes"] for c in cs),
         }))
 
-    estrategias = [fecha(m, {"plataforma": k[0], "estrategia": k[1], "frentes": sorted(es_frentes[k])})
-                   for k, m in sorted(es.items(), key=lambda kv: -kv[1]["investimento"])]
-
-    # ---------------------------------------------------------------- grade mês × estratégia (o ano em mosaico)
-    gm = defaultdict(metricas)
-    gm_frentes = defaultdict(set)
-    gm_camp = defaultdict(set)
-    for r in rows:
-        k = (r["_plat"], r["_estr"], r["_mes"])
-        soma(gm[k], r)
-        gm_frentes[k].add(r["_frente"])
-        gm_camp[k].add(r["Nome Campanha"])
-    grade = {
-        "meses": sorted(meses_map),
-        "linhas": [{"plataforma": e["plataforma"], "estrategia": e["estrategia"]} for e in estrategias],
-        "celulas": [fecha(m, {"plataforma": k[0], "estrategia": k[1], "mes": k[2],
-                              "frentes": sorted(gm_frentes[k]), "campanhas": len(gm_camp[k])})
-                    for k, m in sorted(gm.items(), key=lambda kv: (kv[0][2], kv[0][0], kv[0][1]))],
-    }
-    ativas_mes = defaultdict(set)
-    for k in gm:
-        ativas_mes[k[2]].add((k[0], k[1]))
-    for item in meses:
-        item["estrategiasAtivas"] = len(ativas_mes[item["mes"]])
-        item["campanhasAtivas"] = len({r["Nome Campanha"] for r in rows if r["_mes"] == item["mes"]})
-
-    # ---------------------------------------------------------------- busca (Google)
-    busca_rows = [r for r in rows if r["_plat"] == "Google" and r["_estr"] == "Pesquisa"]
-    busca = metricas()
-    anuncios = defaultdict(metricas)
-    anuncio_frente = {}
-    for r in busca_rows:
-        soma(busca, r)
-        soma(anuncios[r["Nome Criativo"]], r)
-        anuncio_frente[r["Nome Criativo"]] = r["_frente"]
-    cliques_pesquisa = defaultdict(float)
-    for r in busca_rows:
-        if r["_dia"] >= f"{ano}-01-01":
-            cliques_pesquisa[r["_frente"]] += num(r.get("Cliques"))
-    busca_out = fecha(busca, {
-        "anuncios": [
-            fecha(m, {"titulos": [t.strip() for t in nome.split("|") if t.strip()][:4], "frente": anuncio_frente[nome]})
-            for nome, m in sorted(anuncios.items(), key=lambda kv: -kv[1]["cliques"])[:6]
-        ],
-        "palavrasChave": palavras_chave(raw.get("googlekeywords", []), f"{ano}-01-01", ate or fim, cliques_pesquisa),
-    })
-
-    # ---------------------------------------------------------------- público
-    meta_rows = [r for r in rows if r["_plat"] == "Meta"]
-    ig = defaultdict(lambda: {"impressoes": 0.0, "cliques": 0.0, "investimento": 0.0, "engajamento": 0.0})
-    for r in meta_rows:
-        idade = r["_idade"] if r["_idade"] in FAIXAS else ("desconhecida" if r["_idade"] else "")
-        gen = r["_genero"] if r["_genero"] in ("female", "male") else "unknown"
-        if not idade:
+    # ---------------------------------------------------- público (idade × gênero), só informado
+    pub = defaultdict(zero)
+    ignorado = 0.0
+    for r in publico_raw:
+        if r.get("age") not in FAIXAS or r.get("gender") not in ("female", "male"):
+            ignorado += num(r.get("impressions"))
             continue
-        x = ig[(idade, gen)]
-        x["impressoes"] += num(r.get("Impressões"))
-        x["cliques"] += num(r.get("Cliques"))
-        x["investimento"] += num(r.get("Investimento"))
-        x["engajamento"] += num(r.get("Engajamento"))
-    publico_meta = [{"idade": k[0], "genero": k[1], **{m: round(v, 2) for m, v in x.items()}}
-                    for k, x in sorted(ig.items())]
+        soma(pub[(r["age"], r["gender"])], metricas(r))
+    publico = [{"idade": a, "genero": g, **{k: (round(v, 2) if k == "investimento" else round(v)) for k, v in pub[(a, g)].items()}}
+               for a in FAIXAS for g in ("female", "male") if (a, g) in pub]
+    tot_pub_imp = sum(p["impressoes"] for p in publico) + ignorado
+    publico_nota = {"impressoesNaoInformadas": round(ignorado), "pctNaoInformado": round(ignorado / tot_pub_imp, 4) if tot_pub_imp else 0}
 
-    def google_quebra(tabela, campo, mapa):
-        acc = defaultdict(lambda: {"impressoes": 0.0, "cliques": 0.0, "views": 0.0})
-        for r in raw.get(tabela, []):
-            k = mapa.get(r[campo], r[campo])
-            acc[k]["impressoes"] += num(r.get("impressions"))
-            acc[k]["cliques"] += num(r.get("clicks"))
-            acc[k]["views"] += num(r.get("video_trueview_views"))
-        return [{"chave": k, **{m: round(v) for m, v in x.items()}} for k, x in acc.items()]
-
-    idade_g = {"AGE_RANGE_18_24": "18-24", "AGE_RANGE_25_34": "25-34", "AGE_RANGE_35_44": "35-44", "AGE_RANGE_45_54": "45-54",
-               "AGE_RANGE_55_64": "55-64", "AGE_RANGE_65_UP": "65+", "AGE_RANGE_UNDETERMINED": "desconhecida"}
-    gen_g = {"FEMALE": "female", "MALE": "male", "UNDETERMINED": "unknown"}
-    google_idade = sorted(google_quebra("googlefazbemage", "age_range_type", idade_g),
-                          key=lambda x: (FAIXAS + ["desconhecida"]).index(x["chave"]) if x["chave"] in FAIXAS + ["desconhecida"] else 99)
-    google_genero = google_quebra("googlefazbemgender", "gender_type", gen_g)
-
-    # ---------------------------------------------------------------- vídeo
-    vm = {"views": 0.0, "p25": 0.0, "p50": 0.0, "p75": 0.0, "p100": 0.0}
-    for r in meta_rows:
-        vm["views"] += num(r.get("Visualizações"))
-        for q, c in (("p25", "Visualização 25%"), ("p50", "Visualização 50%"), ("p75", "Visualização 75%"), ("p100", "Visualização 100%")):
-            vm[q] += num(r.get(c))
-    yt_rows = [r for r in rows if r["_plat"] == "Google" and r["_estr"] == "YouTube In-Stream"]
-    vy = {"impressoes": 0.0, "views": 0.0, "investimento": 0.0, "p25": 0.0, "p50": 0.0, "p75": 0.0, "p100": 0.0}
-    for r in yt_rows:
-        imp = num(r.get("Impressões"))
-        vy["impressoes"] += imp
-        vy["views"] += num(r.get("Visualizações"))
-        vy["investimento"] += num(r.get("Investimento"))
-        for q, c in (("p25", "Visualização 25%"), ("p50", "Visualização 50%"), ("p75", "Visualização 75%"), ("p100", "Visualização 100%")):
-            v = r.get(c)
-            # Google traz a taxa (0–1) por dia (às vezes 0 ou 1 inteiros, que também são taxa).
-            vy[q] += num(v) * imp if num(v) <= 1 else num(v)
-    video = {"meta": {k: round(v) for k, v in vm.items()},
-             "youtube": {k: round(v, 2) if k == "investimento" else round(v) for k, v in vy.items()},
-             "notaYoutube": "Quartis do YouTube = taxa diária × impressões (estimativa da contagem)."}
-
-    # ---------------------------------------------------------------- engajamento Meta
-    eng = {"total": round(sum(num(r.get("Engajamento")) for r in meta_rows)),
-           "reacoes": round(sum(num(r.get("actions_post_reaction")) for r in meta_rows)),
-           "comentarios": round(sum(num(r.get("actions_comment")) for r in meta_rows)),
-           "compartilhamentos": round(sum(num(r.get("actions_post")) for r in meta_rows)),
-           "salvamentos": round(sum(num(r.get("actions_onsite_conversion_post_save")) for r in meta_rows)),
-           "cliquesLink": round(sum(num(r.get("actions_link_click")) for r in meta_rows)),
-           "youtube": round(sum(num(r.get("Engajamento")) for r in yt_rows))}
-
-    # ---------------------------------------------------------------- criativos
-    cr = defaultdict(metricas)
-    cr_info = {}
-    for r in rows:
-        if r["_estr"] == "Pesquisa":
-            continue  # anúncios de texto ficam na seção de busca
-        k = (r["_plat"], r["Nome Criativo"])
-        soma(cr[k], r)
-        thumb = r.get("ThumbnailURL") or ""
-        link = r.get("permalink direcionamento") or ""
-        if "youtube.com/watch?v=" in thumb:
-            vid = thumb.split("v=")[1].split("&")[0]
-            link, thumb = thumb, f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
-        prev = cr_info.get(k, {})
-        cr_info[k] = {
-            "frente": r["_frente"],
-            "estrategia": r["_estr"],
-            "formato": "video" if (r["_estr"] == "YouTube In-Stream" or num(r.get("Visualizações")) > 0 or prev.get("formato") == "video") else "imagem",
-            "imagemOrigem": thumb or prev.get("imagemOrigem", ""),
-            "link": link or prev.get("link", ""),
-        }
-    # Top 15 por impressões + o vídeo do YouTube de maior entrega (para todas as frentes de mídia aparecerem).
-    ordem = [k for k, _ in sorted(cr.items(), key=lambda kv: -kv[1]["impressoes"]) if cr_info[k]["imagemOrigem"]]
-    escolhidos = ordem[:15]
-    yt = [k for k in ordem if cr_info[k]["estrategia"] == "YouTube In-Stream"]
-    if yt and yt[0] not in escolhidos:
-        escolhidos.append(yt[0])
+    # ---------------------------------------------------- criativos
+    os.makedirs(IMG_PUB, exist_ok=True)
+    for f in os.listdir(IMG_PUB):
+        if f.endswith(".jpg"):
+            os.remove(os.path.join(IMG_PUB, f))
+    candidatos = []
+    for a in anuncios:
+        cr = criativos_raw.get(a["ad_id"])
+        if a["ad_id"] in EXCLUIR_CRIATIVOS or not cr or not cr.get("arquivo"):
+            continue
+        e = estr_de.get(a.get("campaign_id"))
+        if not e:
+            continue
+        origem = os.path.join(RAIZ, cr["arquivo"])
+        if not os.path.exists(origem):
+            continue
+        c = cr.get("creative") or {}
+        story = c.get("effective_object_story_id") or ""
+        candidatos.append(fecha(metricas(a), {
+            "id": a["ad_id"],
+            "nome": a.get("ad_name", ""),
+            "titulo": c.get("title") or "",
+            "estrategia": e,
+            "campanha": nome_curto(a.get("campaign_name", ""), e),
+            "formato": "video" if (c.get("object_type") == "VIDEO" or c.get("video_id")) else "imagem",
+            "link": f"https://www.facebook.com/{story}" if story else "",
+            "imagem": f"/criativos/{a['ad_id']}.jpg",
+            "_origem": origem,
+            "_md5": md5(origem),
+        }))
+    candidatos.sort(key=lambda c: -c["impressoes"])
+    escolhidos, vistos = [], defaultdict(set)
+    por_estr = defaultdict(int)
+    for c in candidatos:
+        if c["_md5"] in vistos[c["estrategia"]] or por_estr[c["estrategia"]] >= CRIATIVOS_POR_ESTRATEGIA:
+            continue
+        vistos[c["estrategia"]].add(c["_md5"])
+        por_estr[c["estrategia"]] += 1
+        escolhidos.append(c)
     criativos = []
-    for i, (p, nome) in enumerate(escolhidos, 1):
-        info = cr_info[(p, nome)]
-        criativos.append(fecha(cr[(p, nome)], {"id": f"{p.lower()}-{i:02d}", "nome": nome, "plataforma": p, **info, "imagem": info["imagemOrigem"]}))
-
-    if baixar_imagens:
-        pasta = os.path.join(os.path.dirname(os.path.abspath(dst)), "..", "..", "public", "criativos")
-        os.makedirs(pasta, exist_ok=True)
-        for c in criativos:
-            destino = os.path.join(pasta, f"{c['id']}.jpg")
-            try:
-                req = urllib.request.Request(c["imagemOrigem"], headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=30) as resp, open(destino, "wb") as fh:
-                    fh.write(resp.read())
-                c["imagem"] = f"/criativos/{c['id']}.jpg"
-            except Exception as e:
-                if os.path.exists(destino):  # URL do fbcdn expirou: fica a cópia local de uma rodada anterior
-                    c["imagem"] = f"/criativos/{c['id']}.jpg"
-                    avisos.append(f"Miniatura não baixada, mantida a cópia local: {c['nome']} ({e.__class__.__name__}).")
-                else:  # sem cópia local: mantém a URL remota
-                    avisos.append(f"Miniatura não baixada: {c['nome']} ({e.__class__.__name__}).")
+    for c in escolhidos:
+        copia_reduzida(c.pop("_origem"), os.path.join(IMG_PUB, f"{c['id']}.jpg"))
+        criativos.append(c)  # _md5 fica para a deduplicação global no front
+    print(f"criativos: {len(criativos)} copiados para public/criativos/ " + str(dict(por_estr)))
 
     snapshot = {
         "cliente": "Hospital Santa Izabel",
-        "periodo": {"inicio": inicio, "fim": fim},
-        "atualizadoEm": raw.get("timestamp") or datetime.now(timezone.utc).isoformat(),
-        "totais": fecha(tot, {"campanhas": len(campanhas), "meses": len(meses), "contratado": contratado_ano()}),
-        "plataformas": plataformas,
+        "titulo": "Relatório de Desempenho · Meta 2026",
+        "periodo": PERIODO,
+        "atualizadoEm": datetime.fromtimestamp(os.path.getmtime(os.path.join(RAW, "conta_total.json")), tz=timezone.utc).isoformat(),
+        "totais": totais,
         "meses": meses,
-        "frentes": frentes,
         "estrategias": estrategias,
         "grade": grade,
-        "busca": busca_out,
-        "publico": {"meta": publico_meta, "googleIdade": google_idade, "googleGenero": google_genero,
-                    "notaGoogle": "Idade e gênero do Google: só campanhas Faz Bem (tabelas googlefazbemage/gender)."},
-        "video": video,
-        "engajamento": eng,
-        "criativos": criativos,
+        "campanhas": campanhas,
+        "publico": publico,
+        "publicoNota": publico_nota,
+        "criativos": [{**{k: v for k, v in c.items() if k != "_md5"}, "chaveImagem": c["_md5"][:12]} for c in criativos],
         "avisos": avisos,
     }
-    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
-    with open(dst, "w", encoding="utf-8") as fh:
-        json.dump(snapshot, fh, ensure_ascii=False, indent=1)
-    t = snapshot["totais"]
-    print(f"ok → {dst}  ·  {inicio} → {fim}  ·  R$ {t['investimento']:,.0f} de R$ {t['contratado']:,.0f} contratados  ·  {t['impressoes']:,} impressões  ·  {len(criativos)} criativos")
+    os.makedirs(os.path.dirname(SAIDA), exist_ok=True)
+    with open(SAIDA, "w", encoding="utf-8") as f:
+        json.dump(snapshot, f, ensure_ascii=False, indent=1)
+    print(f"✓ {os.path.relpath(SAIDA, RAIZ)} · investimento R$ {totais['investimento']:,.2f} · {len(campanhas)} campanhas · meses {meses_ok}")
+    for a in avisos:
+        print("⚠", a, file=sys.stderr)
 
 
 if __name__ == "__main__":
-    argv = sys.argv[1:]
-    curativos = None
-    if "--curativos" in argv:
-        i = argv.index("--curativos")
-        if i + 1 >= len(argv):
-            sys.exit("--curativos precisa do caminho do CSV")
-        curativos = argv[i + 1]
-        del argv[i:i + 2]
-    ate = None
-    if "--ate" in argv:
-        i = argv.index("--ate")
-        if i + 1 >= len(argv):
-            sys.exit("--ate precisa de uma data AAAA-MM-DD")
-        ate = argv[i + 1]
-        try:
-            datetime.strptime(ate, "%Y-%m-%d")
-        except ValueError:
-            sys.exit(f"--ate: data inválida {ate!r} (use AAAA-MM-DD)")
-        del argv[i:i + 2]
-    args = [a for a in argv if not a.startswith("--")]
-    if len(args) != 2:
-        sys.exit("uso: build-snapshot.py <hsi-dados.json> <src/data/snapshot.json> [--curativos <csv>] [--ate AAAA-MM-DD] [--imagens]")
-    main(args[0], args[1], "--imagens" in argv, curativos, ate)
+    main()
