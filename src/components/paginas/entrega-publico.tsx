@@ -33,7 +33,7 @@ export function EntregaPublico({ linhas }: { linhas: PublicoLinha[] }) {
 
   return (
     <div>
-      <div role="tablist" aria-label="Tipo de entrega" className="no-print flex flex-wrap gap-2">
+      <div role="tablist" aria-label="Tipo de entrega" className="no-print -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible" data-lenis-prevent-horizontal>
         {TIPOS.map((t) => (
           <button
             key={t.k}
@@ -41,7 +41,7 @@ export function EntregaPublico({ linhas }: { linhas: PublicoLinha[] }) {
             aria-selected={tipo === t.k}
             onClick={() => setTipo(t.k)}
             className={cn(
-              "rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors duration-300",
+              "shrink-0 rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors duration-300",
               tipo === t.k ? "border-transparent bg-[var(--verde-escuro)] text-white" : "border-line-strong text-text-2 hover:border-[var(--verde)] hover:text-[var(--verde-escuro)]",
             )}
           >
@@ -50,7 +50,7 @@ export function EntregaPublico({ linhas }: { linhas: PublicoLinha[] }) {
         ))}
       </div>
 
-      <div className="mt-8 grid grid-cols-[1fr_64px_1fr] gap-3 text-[11px] font-semibold uppercase tracking-[0.18em]">
+      <div className="mt-8 grid grid-cols-[1fr_52px_1fr] gap-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] md:grid-cols-[1fr_64px_1fr] md:gap-3 md:text-[11px] md:tracking-[0.18em]">
         <span className="text-right" style={{ color: F }}>
           Mulheres · {fmtPct(totF / total, 1)}
         </span>
@@ -59,7 +59,7 @@ export function EntregaPublico({ linhas }: { linhas: PublicoLinha[] }) {
       </div>
       <div className="mt-4 flex flex-col gap-2.5">
         {[...rows].reverse().map((r, i) => (
-          <div key={r.faixa} className="grid grid-cols-[1fr_64px_1fr] items-center gap-3">
+          <div key={r.faixa} className="grid grid-cols-[1fr_52px_1fr] items-center gap-2 md:grid-cols-[1fr_64px_1fr] md:gap-3">
             <Bar v={r.f} max={max} total={total} color={F} right delay={i * 0.06} k={tipo} />
             <span className="text-center text-[12.5px] font-semibold text-text-2 tabular">{r.faixa}</span>
             <Bar v={r.m} max={max} total={total} color={M} right={false} delay={i * 0.06} k={tipo} />
@@ -82,7 +82,9 @@ export function EntregaPublico({ linhas }: { linhas: PublicoLinha[] }) {
 
 function Bar({ v, max, total, color, right, delay, k }: { v: number; max: number; total: number; color: string; right: boolean; delay: number; k: string }) {
   const pct = v / total;
-  const larga = v / max > 0.28;
+  const w = (v / max) * 100;
+  // Barra larga: % dentro, em branco. Barra curta: % fora, encostado na ponta da barra.
+  const larga = w > 45;
   return (
     <div className={cn("relative h-9 rounded-[6px] bg-surface-3", right ? "flex justify-end" : "flex")}>
       <motion.div
@@ -94,11 +96,8 @@ function Bar({ v, max, total, color, right, delay, k }: { v: number; max: number
         transition={{ duration: 0.9, delay, ease: [0.22, 1, 0.36, 1] }}
       />
       <span
-        className={cn(
-          "absolute top-1/2 -translate-y-1/2 text-[11.5px] font-bold tabular",
-          right ? "right-2" : "left-2",
-          larga ? "text-white" : "text-[var(--verde-escuro)]",
-        )}
+        className={cn("absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[11px] font-bold tabular md:text-[11.5px]", larga ? "text-white" : "text-[var(--verde-escuro)]")}
+        style={larga ? (right ? { right: 8 } : { left: 8 }) : right ? { right: `calc(${w}% + 6px)` } : { left: `calc(${w}% + 6px)` }}
       >
         {fmtPct(pct, 1)}
       </span>

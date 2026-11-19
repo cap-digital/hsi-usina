@@ -25,7 +25,7 @@ export function PortasCards({ portas }: { portas: Porta[] }) {
   return (
     <Reveal className={cn("grid gap-4", tres ? "lg:grid-cols-3" : "md:grid-cols-2")} stagger={0.08}>
       {portas.map((p) => {
-        const className = "hub-card group flex min-h-[340px] flex-col justify-between p-7 md:p-8";
+        const className = "hub-card group flex min-h-[200px] flex-col justify-between gap-8 p-6 md:min-h-[340px] md:p-8";
         const tone = p.tom === "amber" ? undefined : p.tom;
         const conteudo = (
           <>

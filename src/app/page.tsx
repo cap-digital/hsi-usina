@@ -40,7 +40,7 @@ export default function Home() {
           </>
         }
         kpis={
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} hint={fmtBRL(t.investimento)} />
             <KpiTile label="Impressões" value={t.impressoes} format="compact" decimals={1} hint={`CPM de ${fmtBRL(t.cpm)}`} />
             <KpiTile label="Alcance" value={t.alcance} format="compact" decimals={2} hint={`Pessoas únicas · frequência ${fmtDec(t.frequencia, 1)}`} />
@@ -131,7 +131,12 @@ export default function Home() {
         <ChartFrame
           eyebrow="Investimento por estratégia e mês"
           title="A grade do ano"
-          subtitle={<span className="no-print">Passe o cursor numa célula para ver a métrica principal e as campanhas.</span>}
+          subtitle={
+            <span className="no-print">
+              <span className="hidden md:inline md:[@media(hover:none)]:hidden">Passe o cursor numa célula para ver a métrica principal e as campanhas.</span>
+              <span className="md:hidden md:[@media(hover:none)]:inline">Toque num mês para ver a métrica principal e as campanhas.</span>
+            </span>
+          }
           span={3}
           minHeight={380}
         >

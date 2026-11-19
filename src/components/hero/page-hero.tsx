@@ -113,7 +113,8 @@ export function PageHero({ eyebrow, title, description, variante = "claro", selo
               trigger="ready"
               delay={0.2}
               className={cn(
-                "display titulo-secao mt-[clamp(14px,2vw,26px)] max-w-[13ch] text-[clamp(3rem,7.6vw,8rem)] leading-[0.92]",
+                // Mobile: 10,5vw faz "INVESTIMENTO" (12 letras, ~7,5em) caber em 320px; desktop como antes.
+                "display titulo-secao mt-[clamp(14px,2vw,26px)] max-w-[13ch] text-[clamp(2rem,10.5vw,3.5rem)] leading-[0.95] md:text-[clamp(3.5rem,7.6vw,8rem)] md:leading-[0.92]",
                 verde ? "text-[var(--verde-escuro)] [&_em]:text-white" : "text-[var(--verde-escuro)] [&_em]:text-[var(--verde)]",
               )}
             >

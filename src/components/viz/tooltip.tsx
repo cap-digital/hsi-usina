@@ -15,17 +15,19 @@ export interface VizTooltipProps {
 
 /** Balão flutuante compartilhado pelos gráficos (branco, borda verde). */
 export function VizTooltip({ x, y, width, open, children }: VizTooltipProps) {
-  const flip = x > width - 240;
+  // Gráfico estreito (celular): o balão ocupa a largura do gráfico, acima do ponto, sem sair da tela.
+  const estreito = width > 0 && width < 520;
+  const flip = !estreito && x > width - 240;
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1, x: flip ? x - 16 : x + 16, y: y - 12 }}
+          animate={{ opacity: 1, scale: 1, x: estreito ? 0 : flip ? x - 16 : x + 16, y: y - 12 }}
           exit={{ opacity: 0, scale: 0.96 }}
           transition={{ type: "spring", stiffness: 520, damping: 42, mass: 0.6 }}
           className="pointer-events-none absolute left-0 top-0 z-20 min-w-[200px] max-w-[280px] rounded-[12px] border border-line-strong bg-white/95 px-4 py-3 shadow-[0_24px_60px_-24px_rgba(0,99,26,.45)] backdrop-blur-md"
-          style={{ translateX: flip ? "-100%" : "0%", translateY: "-100%" }}
+          style={{ translateX: flip ? "-100%" : "0%", translateY: "-100%", ...(estreito ? { width, maxWidth: width, minWidth: 0 } : {}) }}
         >
           {children}
         </motion.div>

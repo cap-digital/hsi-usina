@@ -45,7 +45,7 @@ export function ComposicaoEngajamento({ dados, compacto = false }: { dados: { ro
   return (
     <div>
       {dados.length > 1 && (
-        <div role="tablist" aria-label="Estratégia" className="no-print mb-6 flex flex-wrap gap-2">
+        <div role="tablist" aria-label="Estratégia" className="no-print -mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible" data-lenis-prevent-horizontal>
           {dados.map((d, i) => (
             <button
               key={d.rotulo}
@@ -53,7 +53,7 @@ export function ComposicaoEngajamento({ dados, compacto = false }: { dados: { ro
               aria-selected={sel === i}
               onClick={() => setSel(i)}
               className={cn(
-                "rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors duration-300",
+                "shrink-0 rounded-full border px-4 py-2 text-[13px] font-semibold transition-colors duration-300",
                 sel === i ? "border-transparent bg-[var(--verde-escuro)] text-white" : "border-line-strong text-text-2 hover:border-[var(--verde)] hover:text-[var(--verde-escuro)]",
               )}
             >
@@ -63,7 +63,7 @@ export function ComposicaoEngajamento({ dados, compacto = false }: { dados: { ro
         </div>
       )}
 
-      <div className={cn("grid gap-3", compacto ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 xl:grid-cols-4")}>
+      <div className={cn("grid grid-cols-1 gap-3 min-[400px]:grid-cols-2", compacto ? "md:grid-cols-4" : "xl:grid-cols-4")}>
         {destaques.map((it, i) => {
           const v = m[it.k];
           const Icone = it.icone;
@@ -71,10 +71,10 @@ export function ComposicaoEngajamento({ dados, compacto = false }: { dados: { ro
             <div key={it.k} className="rounded-[16px] bg-[var(--surface-3)] p-4 md:p-5">
               <div className="flex items-center gap-2 text-[var(--verde-escuro)]">
                 <Icone className="size-4 shrink-0" aria-hidden />
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">{it.rotulo}</span>
+                <span className="min-w-0 text-[10.5px] font-semibold uppercase tracking-[0.1em] [overflow-wrap:anywhere] md:text-[11px] md:tracking-[0.16em]">{it.rotulo}</span>
               </div>
               <div className="mt-3 flex items-end justify-between gap-3">
-                <span className="display text-[clamp(1.7rem,2.6vw,2.4rem)] font-black leading-none text-[var(--verde)] tabular">{fmtNum(v)}</span>
+                <span className="display whitespace-nowrap text-[clamp(1.6rem,2.6vw,2.4rem)] font-black leading-none text-[var(--verde)] tabular">{fmtNum(v)}</span>
                 <span className="pb-0.5 text-[12px] font-bold text-[var(--verde-escuro)] tabular">{pct(v, total)}</span>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
@@ -98,7 +98,7 @@ export function ComposicaoEngajamento({ dados, compacto = false }: { dados: { ro
             const Icone = it.icone;
             return (
               <li key={it.k}>
-                <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px]">
                   <span className="flex items-center gap-2 text-text-2">
                     <Icone className="size-3.5 shrink-0 text-[var(--verde-escuro)]" aria-hidden />
                     {it.rotulo}
@@ -179,9 +179,9 @@ export function InteracoesMini({ m, className }: { m: Metricas; className?: stri
     { k: "compartilhamentos" as const, icone: Share2, rotulo: "compartilhamentos" },
   ];
   return (
-    <div className={cn("flex items-center gap-3 text-[11.5px] font-semibold text-[var(--verde-escuro)] tabular", className)}>
+    <div className={cn("flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-[var(--verde-escuro)] tabular md:gap-x-3 md:text-[11.5px]", className)}>
       {itens.map(({ k, icone: Icone, rotulo }) => (
-        <span key={k} className="inline-flex items-center gap-1" title={`${fmtNum(m[k])} ${rotulo}`} aria-label={`${fmtNum(m[k])} ${rotulo}`}>
+        <span key={k} className="inline-flex items-center gap-1 whitespace-nowrap" title={`${fmtNum(m[k])} ${rotulo}`} aria-label={`${fmtNum(m[k])} ${rotulo}`}>
           <Icone className="size-3.5" aria-hidden />
           {fmtCompact(m[k])}
         </span>

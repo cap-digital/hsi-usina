@@ -3,7 +3,7 @@ import { KpiTile } from "@/components/core/kpi-tile";
 import { Reveal } from "@/components/core/reveal";
 import { Section } from "@/components/core/section";
 import { PageHero } from "@/components/hero/page-hero";
-import { ComposicaoEngajamento } from "@/components/paginas/composicao-engajamento";
+import { ComposicaoEngajamento, InteracoesMini } from "@/components/paginas/composicao-engajamento";
 import { CriativosGrid } from "@/components/paginas/criativos";
 import { PortasCards } from "@/components/paginas/portas";
 import { SplitBar } from "@/components/viz/small";
@@ -58,7 +58,7 @@ export default function Campanhas() {
           esp.map((e) => `${e.estrategia} recebeu ${fmtMil(e.investimento)}`),
         )}.`}
         kpis={
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-3">
             <KpiTile label="Always On" value={invAo} format="compactCurrency" decimals={1} hint={`${fmtPct(invAo / t.investimento, 0)} do investimento · ${campAo} campanhas`} />
             {esp.map((e, i) => (
               <KpiTile
@@ -69,7 +69,7 @@ export default function Campanhas() {
                 decimals={1}
                 tone="dusk"
                 hint={`${fmtPct(e.investimento / t.investimento, 0)} do investimento · ${fmtMeses(e.meses)}`}
-                className={i === esp.length - 1 && esp.length % 2 === 0 ? "col-span-2 md:col-span-1" : undefined}
+                className={i === esp.length - 1 && esp.length % 2 === 0 ? "min-[400px]:col-span-2 md:col-span-1" : undefined}
               />
             ))}
           </div>
@@ -143,7 +143,7 @@ function SecaoEstrategia({ e, index, especial = false }: { e: Estrategia; index:
         }
         description={`${TEXTO[e.estrategia] ?? ""} ${fmtMil(e.investimento)} ${unica ? "" : `em ${campanhas.length} campanhas `}de ${fmtMeses(e.meses)}, com ${p.custoRotulo.toLowerCase() === "cpm" || p.custoRotulo === "CPC" ? p.custoRotulo : p.custoRotulo.toLowerCase()} de ${fmtCusto(p.custo)}.`}
       >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-4">
           <KpiTile label="Investimento" value={e.investimento} format="compactCurrency" decimals={1} hint={fmtBRL(e.investimento)} />
           <KpiTile label={p.rotulo[0].toUpperCase() + p.rotulo.slice(1)} value={p.valor} format="compact" decimals={p.valor >= 1e6 ? 2 : 1} />
           <KpiTile label={p.custoRotulo} value={p.custo} format="currency" decimals={casasCusto(p.custo)} />
@@ -164,9 +164,13 @@ function SecaoEstrategia({ e, index, especial = false }: { e: Estrategia; index:
         )}
 
         {campanhas.length > 1 && (
-          <Reveal className="hub-card mt-4 overflow-x-auto p-2 md:p-3" y={20}>
-            <TabelaCampanhas campanhas={campanhas} e={e} />
-          </Reveal>
+          <>
+            {/* Celular: cards empilhados (sem rolagem lateral). Tablet/desktop e PDF: tabela. */}
+            <CardsCampanhas campanhas={campanhas} e={e} />
+            <Reveal className="hub-card mt-4 hidden overflow-x-auto p-3 md:block" y={20}>
+              <TabelaCampanhas campanhas={campanhas} e={e} />
+            </Reveal>
+          </>
         )}
 
         {poucos && criativos.length > 0 && (
@@ -185,6 +189,45 @@ function SecaoEstrategia({ e, index, especial = false }: { e: Estrategia; index:
         </Section>
       )}
     </>
+  );
+}
+
+function CardsCampanhas({ campanhas, e }: { campanhas: Campanha[]; e: Estrategia }) {
+  const eng = e.principal === "engajamento";
+  return (
+    <ul className="mt-4 flex flex-col gap-3 md:hidden">
+      {campanhas.map((c) => {
+        const m = metricaPrincipal(c, e.principal);
+        const quarto = e.principal === "impressoes" ? { rotulo: "Alcance", valor: fmtNum(c.alcance) } : { rotulo: "Impressões", valor: fmtNum(c.impressoes) };
+        const itens = [
+          { rotulo: "Investimento", valor: fmtBRL(c.investimento) },
+          { rotulo: m.rotulo[0].toUpperCase() + m.rotulo.slice(1), valor: fmtNum(m.valor) },
+          { rotulo: m.custoRotulo, valor: fmtCusto(m.custo) },
+          quarto,
+        ];
+        return (
+          <li key={c.id} className="hub-card p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="text-[14px] font-bold leading-snug text-[var(--verde-escuro)]">
+                {c.nomeCurto}
+                {c.comecouAntes && <span className="ml-1 text-text-3">*</span>}
+              </span>
+              <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-text-3">{fmtMeses(c.meses)}</span>
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3">
+              {itens.map((it) => (
+                <div key={it.rotulo} className="min-w-0">
+                  <dt className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-text-3">{it.rotulo}</dt>
+                  <dd className="mt-0.5 text-[15px] font-bold text-text tabular">{it.valor}</dd>
+                </div>
+              ))}
+            </dl>
+            {eng && <InteracoesMini m={c} className="mt-3 border-t border-line pt-3" />}
+          </li>
+        );
+      })}
+      {campanhas.some((c) => c.comecouAntes) && <li className="px-1 text-[11px] text-text-3">* Começou em 2025; aqui só o veiculado em 2026.</li>}
+    </ul>
   );
 }
 

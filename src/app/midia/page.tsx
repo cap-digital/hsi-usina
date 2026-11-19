@@ -48,12 +48,12 @@ export default function Midia() {
         }
         description={`${fmtMil(t.investimento)} em ${fmtNum(t.campanhas)} campanhas e ${s.estrategias.length} estratégias: ${fmtCompact(t.impressoes, 1)} de impressões, ${fmtCompact(t.alcance, 1)} de pessoas alcançadas e ${fmtCompact(t.engajamento, 2)} de engajamentos.`}
         kpis={
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
             <KpiTile label="Investimento" value={t.investimento} format="compactCurrency" decimals={1} hint="Valor do Gerenciador de Anúncios" />
             <KpiTile label="CPM" value={t.cpm} format="currency" decimals={2} hint="Custo por mil impressões" />
             <KpiTile label="Custo por engajamento" value={t.custoEngajamento} format="currency" decimals={casasCusto(t.custoEngajamento)} hint={`${fmtCompact(t.engajamento, 2)} engajamentos`} />
             <KpiTile label="CPC" value={t.cpc} format="currency" decimals={2} hint={`Por clique no link · ${fmtCompact(t.cliquesLink, 1)} cliques`} />
-            <KpiTile label="CTR" value={t.ctr * 100} format="percent" decimals={2} hint="Cliques ÷ impressões" className="col-span-2 md:col-span-1" />
+            <KpiTile label="CTR" value={t.ctr * 100} format="percent" decimals={2} hint="Cliques ÷ impressões" className="min-[400px]:col-span-2 md:col-span-1" />
           </div>
         }
       />
@@ -181,16 +181,17 @@ function CartaoEstrategia({ e, i }: { e: Estrategia; i: number }) {
   const p = metricaPrincipal(e, e.principal);
   return (
     <Reveal className="hub-card flex flex-col gap-5 p-6 md:p-7" y={24} delay={(i % 3) * 0.05}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      {/* O selo de meses desce para baixo do nome quando não cabe ao lado (celular). */}
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
           <span className="eyebrow text-[var(--verde-escuro)]">{e.grupo}</span>
           <h3 className="display titulo-secao mt-2 text-[1.45rem] text-[var(--verde-escuro)]">{e.estrategia}</h3>
         </div>
-        <span className="selo shrink-0 !px-3 !text-[10px]">{fmtMeses(e.meses)}</span>
+        <span className="selo !px-3 !text-[10px] !tracking-[0.16em]">{fmtMeses(e.meses)}</span>
       </div>
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div>
-          <span className="display block text-[2.3rem] font-black leading-none text-[var(--verde)] tabular">{fmtCompact(p.valor, 1)}</span>
+          <span className="display block whitespace-nowrap text-[2.1rem] font-black leading-none text-[var(--verde)] tabular md:text-[2.3rem]">{fmtCompact(p.valor, 1)}</span>
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.rotulo}</span>
         </div>
         <div className="text-right">

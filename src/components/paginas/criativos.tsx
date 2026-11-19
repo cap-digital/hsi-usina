@@ -61,22 +61,23 @@ export function CriativosGrid({ criativos, mostrarEstrategia = true }: { criativ
                   </a>
                 )}
               </div>
-              <figcaption className="flex flex-1 flex-col gap-3 p-3.5 md:p-4">
-                <div className="flex items-end justify-between gap-3">
+              <figcaption className="flex min-w-0 flex-1 flex-col gap-3 p-3 md:p-4">
+                {/* No celular (cards de ~160px) impressões e custo empilham em vez de cortar. */}
+                <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
                   <div>
-                    <span className="display block whitespace-nowrap text-[1.35rem] font-black leading-none text-[var(--verde)] tabular md:text-[1.6rem]">
+                    <span className="display block whitespace-nowrap text-[1.25rem] font-black leading-none text-[var(--verde)] tabular md:text-[1.6rem]">
                       {fmtCompact(c.impressoes)}
                     </span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-3">impressões</span>
+                    <span className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-text-3 md:text-[10px] md:tracking-[0.16em]">impressões</span>
                   </div>
-                  <div className="text-right">
+                  <div className="md:text-right">
                     <span className="block whitespace-nowrap text-[14px] font-bold text-[var(--verde-escuro)] tabular">{fmtCusto(p.custo)}</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-3">{p.custoCurto}</span>
+                    <span className="whitespace-nowrap text-[9.5px] font-semibold uppercase tracking-[0.12em] text-text-3 md:text-[10px] md:tracking-[0.16em]">{p.custoCurto}</span>
                   </div>
                 </div>
                 <InteracoesMini m={c} />
-                <div className="mt-auto flex items-center justify-between gap-2 border-t border-line pt-2.5 text-[11px] text-text-3 tabular">
-                  <span className="truncate">{chave === "impressoes" ? `${fmtCompact(c.alcance)} de alcance` : `${fmtCompact(p.valor)} ${p.rotulo}`}</span>
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 border-t border-line pt-2.5 text-[11px] text-text-3 tabular">
+                  <span>{chave === "impressoes" ? `${fmtCompact(c.alcance)} de alcance` : `${fmtCompact(p.valor)} ${p.rotulo}`}</span>
                   <span className="shrink-0">{fmtBRL(c.investimento, { compact: true })}</span>
                 </div>
               </figcaption>

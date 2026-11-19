@@ -9,7 +9,9 @@ import type { Mes } from "@/data/types";
 import { fmtBRL, fmtCompact, fmtNum } from "@/data/format";
 import { TipRow, TipTitle, VizTooltip } from "./tooltip";
 
-const M = { top: 28, right: 64, bottom: 36, left: 64 };
+const M_LARGO = { top: 28, right: 64, bottom: 36, left: 64 };
+/** Estreito (< 520px): sem eixo esquerdo (cada barra já tem o valor em cima) e eixo direito enxuto. */
+const M_ESTREITO = { top: 26, right: 34, bottom: 34, left: 8 };
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 /** Investimento (barras, verde) e impressões (linha, verde-escuro, eixo à direita) nos meses com veiculação. */
@@ -17,6 +19,8 @@ export function MonthlyChart({ meses, height = 360 }: { meses: Mes[]; height?: n
   const [ref, bounds] = useMeasure();
   const [hi, setHi] = useState<number | null>(null);
   const width = bounds.width || 0;
+  const estreito = width > 0 && width < 520;
+  const M = estreito ? M_ESTREITO : M_LARGO;
   const iw = Math.max(0, width - M.left - M.right);
   const ih = height - M.top - M.bottom;
 
@@ -39,7 +43,7 @@ export function MonthlyChart({ meses, height = 360 }: { meses: Mes[]; height?: n
       <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12.5px] text-text-2">
         <span className="flex items-center gap-2">
           <span className="size-2.5 rounded-[3px] bg-[var(--verde)]" />
-          Investimento
+          Investimento <span className="sm:hidden">(R$, valor sobre a barra)</span>
         </span>
         <span className="flex items-center gap-2">
           <span className="h-[2.5px] w-4 rounded-full bg-[var(--verde-escuro)]" />
@@ -50,18 +54,20 @@ export function MonthlyChart({ meses, height = 360 }: { meses: Mes[]; height?: n
 
       <div ref={ref} className="relative w-full" style={{ height }}>
         {width > 0 && (
-          <svg width={width} height={height} className="block overflow-visible" onPointerLeave={() => setHi(null)}>
+          <svg width={width} height={height} className="block overflow-visible" onPointerLeave={(e) => e.pointerType === "mouse" && setHi(null)}>
             <g transform={`translate(${M.left},${M.top})`}>
               {ys.ticks(4).map((t) => (
                 <g key={t} transform={`translate(0,${ys(t)})`}>
                   <line x2={iw} stroke="var(--chart-grid)" />
-                  <text x={-12} dy="0.32em" textAnchor="end" className="fill-[var(--text-3)] text-[10.5px] tabular">
-                    {fmtBRL(t, { compact: true, decimals: 0 })}
-                  </text>
+                  {!estreito && (
+                    <text x={-12} dy="0.32em" textAnchor="end" className="fill-[var(--text-3)] text-[10.5px] tabular">
+                      {fmtBRL(t, { compact: true, decimals: 0 })}
+                    </text>
+                  )}
                 </g>
               ))}
               {yi.ticks(4).map((t) => (
-                <text key={t} x={iw + 12} y={yi(t)} dy="0.32em" className="fill-[var(--verde-escuro)] text-[10.5px] tabular">
+                <text key={t} x={iw + (estreito ? 6 : 12)} y={yi(t)} dy="0.32em" className="fill-[var(--verde-escuro)] text-[10px] tabular md:text-[10.5px]">
                   {fmtCompact(t, 0)}
                 </text>
               ))}
@@ -71,7 +77,13 @@ export function MonthlyChart({ meses, height = 360 }: { meses: Mes[]; height?: n
                 const y = ys(d.investimento);
                 const dim = hi !== null && hi !== i;
                 return (
-                  <g key={d.mes} onPointerEnter={() => setHi(i)} opacity={dim ? 0.45 : 1} style={{ transition: "opacity .3s" }}>
+                  <g
+                    key={d.mes}
+                    onPointerEnter={(e) => e.pointerType === "mouse" && setHi(i)}
+                    onClick={() => setHi((h) => (h === i ? null : i))}
+                    opacity={dim ? 0.45 : 1}
+                    style={{ transition: "opacity .3s", cursor: "pointer" }}
+                  >
                     <rect x={bx - (x.step() * x.paddingInner()) / 2} width={x.step()} y={0} height={ih} fill="transparent" />
                     <motion.rect
                       x={bx}
@@ -87,15 +99,15 @@ export function MonthlyChart({ meses, height = 360 }: { meses: Mes[]; height?: n
                       x={bx + bw / 2}
                       y={y - 10}
                       textAnchor="middle"
-                      className="fill-[var(--verde-escuro)] text-[12px] font-bold tabular"
+                      className={estreito ? "fill-[var(--verde-escuro)] text-[10px] font-bold tabular" : "fill-[var(--verde-escuro)] text-[12px] font-bold tabular"}
                       initial={{ opacity: 0 }}
                       whileInView={{ opacity: 1 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.6, delay: 0.6 + i * 0.08 }}
                     >
-                      {fmtBRL(d.investimento, { compact: true })}
+                      {estreito ? fmtCompact(d.investimento, 1) : fmtBRL(d.investimento, { compact: true })}
                     </motion.text>
-                    <text x={bx + bw / 2} y={ih + 24} textAnchor="middle" className="fill-[var(--text-2)] text-[12px] font-semibold uppercase tracking-[0.18em]">
+                    <text x={bx + bw / 2} y={ih + 24} textAnchor="middle" className="fill-[var(--text-2)] text-[11px] font-semibold uppercase tracking-[0.14em] md:text-[12px] md:tracking-[0.18em]">
                       {d.rotulo}
                     </text>
                   </g>
